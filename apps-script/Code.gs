@@ -367,7 +367,7 @@ function normalize_(s) {
   return String(s === undefined || s === null ? '' : s)
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }

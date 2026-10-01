@@ -187,10 +187,10 @@ function submit_(p) {
         break;
       }
     }
-    sheet.appendRow([
+    appendRowText_(sheet, [
       new Date(), nombre, grupo, result.aciertos, result.errores, result.blancos,
       result.nota, duracion, duplicado, JSON.stringify(answers)
-    ]);
+    ], [2, 3]);
   } finally {
     lock.releaseLock();
   }
@@ -237,7 +237,7 @@ function createExam_(p) {
   var id;
   try {
     id = newExamId_();
-    getExamsSheet_().appendRow([
+    appendRowText_(getExamsSheet_(), [
       id,
       titulo,
       cleanText_(p.grupo_destino).slice(0, MAX_TEXT),
@@ -250,7 +250,7 @@ function createExam_(p) {
       toBool_(p.permitir_negativa),
       json,
       new Date()
-    ]);
+    ], [1, 3, 5]);
     getResultsSheet_(id);
   } finally {
     lock.releaseLock();
@@ -381,7 +381,8 @@ function newExamId_() {
   readExams_().forEach(function (e) { existing[e.id] = true; });
   var id;
   do {
-    id = Utilities.getUuid().replace(/-/g, '').slice(0, 8);
+    // Empieza por letra: Sheets convertiría "545297e4" en el número 5452970000.
+    id = 'x' + Utilities.getUuid().replace(/-/g, '').slice(0, 7);
   } while (existing[id]);
   return id;
 }
@@ -431,6 +432,16 @@ function setTextColumns_(sheet, cols) {
   cols.forEach(function (c) {
     sheet.getRange(1, c, sheet.getMaxRows(), 1).setNumberFormat('@');
   });
+}
+
+// Añade una fila marcando antes como texto plano las columnas indicadas, para que
+// Sheets no convierta ids, códigos o grupos en números o fechas. Usar con el lock tomado.
+function appendRowText_(sheet, values, textCols) {
+  var row = sheet.getLastRow() + 1;
+  textCols.forEach(function (c) {
+    sheet.getRange(row, c).setNumberFormat('@');
+  });
+  sheet.getRange(row, 1, 1, values.length).setValues([values]);
 }
 
 function getExamsSheet_() {

@@ -45,7 +45,7 @@ test("studentLink conserva la carpeta del sitio y sustituye la consulta", () => 
 });
 
 test("randomCode: longitud y alfabeto sin caracteres ambiguos", () => {
-  for (let i = 0; i < 200; i++) assert.match(randomCode(), /^[A-HJ-NP-Z2-9]{6}$/);
+  for (let i = 0; i < 200; i++) assert.match(randomCode(), /^[A-HJ-NP-Z][A-HJ-NP-Z2-9]{5}$/);
   assert.equal(randomCode(3, () => 0), "AAA");
 });
 

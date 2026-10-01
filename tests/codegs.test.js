@@ -139,3 +139,26 @@ test("permitir_negativa se respeta en el servidor", () => {
   const r = env.post({ action: "submit", examId: id, nombre: "A", grupo: "B", respuestas: { q1: "b", q2: "a", q3: "a" } });
   assert.equal(r.nota, -3.33);
 });
+
+test("regresión: un id con forma de notación científica no se convierte en número", () => {
+  // Los 8 primeros caracteres del uuid serían "545297e4": Sheets lo guardaría como 5452970000.
+  const env = makeEnv("secreto", { uuid: () => "545297e4-aaaa-bbbb-cccc-dddddddddddd" });
+  const id = publish(env);
+  assert.match(id, /^x/);
+  const row = env.sheets.get("Examenes").rows[1];
+  assert.equal(row[0], id, "el id guardado es el que se devolvió");
+  assert.equal(typeof row[0], "string");
+  assert.equal(env.get({ action: "exam", id }).ok, true);
+  assert.equal(env.post({ action: "submit", examId: id, nombre: "A", grupo: "1-2", respuestas: {} }).ok, true);
+  const list = env.get({ action: "list", token: "secreto" }).exams[0];
+  assert.equal(list.id, id);
+  assert.equal(list.envios, 1, "la hoja R_ de resultados es la misma que la del examen");
+  assert.equal(env.sheets.get(`R_${id}`).rows[1][2], "1-2", "el grupo no se convierte en fecha");
+});
+
+test("regresión: un código de acceso con forma numérica se compara bien", () => {
+  const env = makeEnv();
+  const id = publish(env, { codigo_acceso: "2e4567" });
+  assert.equal(env.get({ action: "exam", id, code: "2E4567" }).ok, true);
+  assert.equal(env.get({ action: "list", token: "secreto" }) .exams[0].codigo_acceso, "2e4567");
+});

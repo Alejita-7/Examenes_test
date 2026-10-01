@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isReducedWindow, isAway } from "../js/presence.js";
+import { isReducedWindow } from "../js/presence.js";
 
 // iPad Air 11" en horizontal: pantalla 1180x820. Safari a pantalla completa deja ~ 1180x700.
 const ipad = { screenWidth: 1180, screenHeight: 820, coarse: true };
@@ -30,17 +30,9 @@ test("valores raros no provocan falsos positivos", () => {
   assert.equal(isReducedWindow({ screenWidth: NaN, screenHeight: NaN, coarse: true, innerWidth: 500, innerHeight: 500 }), false);
 });
 
-test("isAway: cualquier señal basta; la falta de foco necesita 1 s seguido", () => {
-  assert.equal(isAway({}), false);
-  assert.equal(isAway({ hidden: true }), true);
-  assert.equal(isAway({ blurred: true }), true);
-  assert.equal(isAway({ reduced: true }), true);
-  assert.equal(isAway({ noFocusMs: 400 }), false);
-  assert.equal(isAway({ noFocusMs: 1000 }), true);
-});
-
-test("isAway: salir de la pantalla completa cuenta; el ratón fuera necesita 2 s seguidos", () => {
-  assert.equal(isAway({ fullscreenLost: true }), true);
-  assert.equal(isAway({ pointerOutMs: 1500 }), false);
-  assert.equal(isAway({ pointerOutMs: 2000 }), true);
+test("histéresis: una vez reducida, hace falta recuperar más para considerarla restaurada", () => {
+  // proporción 0,78: por encima de 0,75 (no se reduce), por debajo de 0,82 (no se restaura)
+  const w = { ...ipad, innerWidth: 1180, innerHeight: Math.round(0.78 * 820) };
+  assert.equal(isReducedWindow({ ...w, wasReduced: false }), false);
+  assert.equal(isReducedWindow({ ...w, wasReduced: true }), true);
 });

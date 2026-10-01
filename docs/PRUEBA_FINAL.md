@@ -84,6 +84,9 @@ Publica un examen con **Vigilar salidas** marcado y **2 salidas permitidas** (as
 - [ ] **Ordenador (PC o Mac):** al pulsar «Empezar» el examen pasa a pantalla completa. Pulsa **Esc** para salir de ella: el examen se oculta, aparece «Volver a pantalla completa» y, al pulsarlo, vuelve el examen con el aviso rojo.
 - [ ] **Ordenador:** pon otra ventana al lado o encima y haz clic en ella: el examen se oculta. Mueve el ratón fuera de la página (a otra ventana o monitor) más de 2 segundos: se oculta; un paseo corto no cuenta.
 - [ ] **iPad:** al pulsar «Empezar» mira si pasa a pantalla completa (si no lo permite, no se exige). Abre una app flotante (Slide Over) encima **sin** reducir la ventana: puede que no se detecte (ver README). Anota qué pasa; `diagnostico.html` muestra las señales.
+- [ ] **Empezar sin pantalla completa:** si el examen no llega a pasar a pantalla completa, aparece «Pon el examen a pantalla completa. Esto todavía no cuenta como salida» y **no** se suma ninguna salida. Al pasar a pantalla completa (botón o un toque), el examen aparece y la hoja marca `salidas` = 0.
+- [ ] **Gestos naturales del iPad** (deslizar para el centro de control o las notificaciones, mostrar la barra de apps y volver enseguida, girar el iPad): **no** deben sumar salidas. Si alguno lo hace, mira la columna `motivos_salida` de la hoja o `diagnostico.html` y apúntame cuál.
+- [ ] Si la pantalla completa se pierde por un gesto, un **toque** en cualquier parte la restaura sin penalización.
 - [ ] Girar el iPad (vertical/horizontal) **no** cuenta como salida.
 - [ ] En un examen **sin** vigilar, cambiar de app no cuenta nada ni avisa.
 - [ ] Un examen publicado antes de esta versión sigue funcionando.

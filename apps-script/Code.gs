@@ -18,7 +18,7 @@ const EXAM_HEADERS = [
 const RESULT_HEADERS = [
   'fecha', 'nombre', 'grupo', 'aciertos', 'errores', 'blancos', 'nota',
   'duracion_min', 'posible_duplicado', 'respuestas_json',
-  'salidas', 'segundos_fuera', 'tipo_envio', 'envio_id'
+  'salidas', 'segundos_fuera', 'tipo_envio', 'envio_id', 'motivos_salida'
 ];
 const ENVIO_TYPES = ['manual', 'tiempo', 'salida'];
 const MAX_TEXT = 60;          // nombre y grupo
@@ -180,6 +180,8 @@ function submit_(p) {
   var segundosFuera = clampNumber_(p.segundos_fuera, 86400, 1);
   var tipoEnvio = ENVIO_TYPES.indexOf(p.envio) !== -1 ? p.envio : 'manual';
   var envioId = typeof p.envioId === 'string' ? p.envioId.trim().slice(0, 64) : '';
+  // Señales que provocaron cada salida (p. ej. "reduced,hidden"); solo letras y comas.
+  var motivos = typeof p.motivos_salida === 'string' ? p.motivos_salida.replace(/[^A-Za-z,]/g, '').slice(0, 120) : '';
 
   var lock = LockService.getScriptLock();
   try {
@@ -201,6 +203,7 @@ function submit_(p) {
     if (sameSend !== -1) {
       sheet.getRange(sameSend + 1, 11).setValue(Math.max(Number(rows[sameSend][10]) || 0, salidas));
       sheet.getRange(sameSend + 1, 12).setValue(Math.max(Number(rows[sameSend][11]) || 0, segundosFuera));
+      if (motivos.length > String(rows[sameSend][14] || '').length) sheet.getRange(sameSend + 1, 15).setValue(motivos);
     } else {
       var n = normalize_(nombre);
       var g = normalize_(grupo);
@@ -214,8 +217,8 @@ function submit_(p) {
       appendRowText_(sheet, [
         new Date(), nombre, grupo, result.aciertos, result.errores, result.blancos,
         result.nota, duracion, duplicado, JSON.stringify(answers),
-        salidas, segundosFuera, tipoEnvio, envioId
-      ], [2, 3, 14]);
+        salidas, segundosFuera, tipoEnvio, envioId, motivos
+      ], [2, 3, 14, 15]);
     }
   } finally {
     lock.releaseLock();
@@ -520,7 +523,7 @@ function getResultsSheet_(examId) {
     sh = ss.insertSheet(name);
     sh.appendRow(RESULT_HEADERS);
     sh.setFrozenRows(1);
-    setTextColumns_(sh, [2, 3, 14]);
+    setTextColumns_(sh, [2, 3, 14, 15]);
   } else {
     ensureHeaders_(sh, RESULT_HEADERS);
   }

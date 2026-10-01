@@ -110,25 +110,25 @@ Al publicar, la casilla **«Vigilar salidas»** viene marcada, con **3 salidas p
 - Al **superar las salidas permitidas** (con 3, a la cuarta), el examen **se envía automáticamente** tal como esté.
 - Las salidas y el tiempo fuera **quedan siempre registrados**, tanto si el alumno envía el examen él mismo como si se envía solo o se acaba el tiempo.
 - La pantalla inicial explica la norma al alumno. Durante el examen se desactivan **copiar, cortar, pegar, el menú contextual y seleccionar texto** (frena la copia casual; no es infalible).
-- En la hoja de resultados aparecen cuatro columnas más: `salidas`, `segundos_fuera`, `tipo_envio` (`manual`, `tiempo` o `salida`) y `envio_id`.
+- En la hoja de resultados aparecen cuatro columnas más: `salidas`, `segundos_fuera`, `tipo_envio` (`manual`, `tiempo` o `salida`), `envio_id` y `motivos_salida`.
 
 La nota se calcula con normalidad: la app **no pone un 0 automático**. Las columnas `salidas` y `segundos_fuera` son una señal para que decidas tú.
 
 **Límites que conviene conocer.** Una web puede detectar que el alumno se va, pero no impedirlo, ni ver otros dispositivos (por ejemplo, un móvil al lado). El registro lo envía el navegador del alumno. Si el alumno sale y no vuelve a abrir el examen mientras le quedan salidas, no se genera ninguna fila hasta que lo envíe. Para un bloqueo real en iPad, usa el **Acceso guiado** del propio iPad (*Ajustes → Accesibilidad → Acceso guiado*; se inicia con triple clic en el botón lateral) o el modo de app única que el centro puede activar desde su sistema de gestión de dispositivos. Se complementa con esta vigilancia.
 
-**Cómo se detecta la salida.** Se combinan varias señales, porque ninguna basta por sí sola:
+**Cómo se detecta la salida.** Se combinan varias señales, porque ninguna basta por sí sola. Cada una tiene un **margen**: solo cuenta como salida si se mantiene más de ese tiempo, para no penalizar los gestos naturales de la tableta (centro de control, barra de aplicaciones, giros...).
 
-| Señal | Qué detecta |
-|---|---|
-| Página oculta | Otra pestaña, otra app (cuando cubre todo), pantalla bloqueada |
-| Ventana sin foco | Hacer clic en otra ventana o app |
-| Salir de la pantalla completa | Al empezar un examen vigilado se pide pantalla completa (en ordenadores y en las tabletas que lo permiten); si el alumno sale de ella, el examen se oculta y aparece el botón «Volver a pantalla completa» |
-| Ratón fuera de la página | Solo en ordenadores: si el cursor sale de la página más de 2 segundos (otra ventana, otro monitor) |
-| Ventana reducida | Solo en tabletas: pantalla dividida, Slide Over o Stage Manager que reducen la ventana |
+| Señal | Qué detecta | Margen |
+|---|---|---|
+| Página oculta | Otra pestaña, otra app (cuando cubre todo), pantalla bloqueada | al instante |
+| Ventana reducida | Solo en tabletas: pantalla dividida, Slide Over o Stage Manager que reducen la ventana | 1,5 s |
+| Salir de la pantalla completa | Se pide pantalla completa al empezar; si el alumno sale de ella, el examen se oculta y un **toque en cualquier parte** (o el botón) la restaura | 5 s en tabletas, 1,5 s en ordenadores |
+| Ventana sin foco | Hacer clic en otra ventana o app | 2 s |
+| Ratón fuera de la página | Solo en ordenadores: otra ventana, otro monitor | 2 s |
 
-Mientras el alumno está «fuera» por cualquiera de ellas, el examen se oculta.
+**Al empezar no se penaliza nada.** Mientras el examen no esté bien colocado (por ejemplo, sin pantalla completa), el alumno ve «Pon el examen a pantalla completa. Esto todavía no cuenta como salida», con un botón, y la vigilancia no empieza hasta que lleva 1,5 s seguidos en buen estado. Si el navegador no permite la pantalla completa, no se exige. Tras pedirla, se esperan 2,5 s a que el navegador termine de cambiar de tamaño.
 
-Para no contar como salida lo que no hace el alumno, no se vigila durante los **3 primeros segundos** del examen (y otros 3 tras pulsar «Volver a pantalla completa»), porque el navegador cambia de tamaño al entrar en pantalla completa. Además, una ventana reducida solo cuenta si se mantiene **más de 1 segundo**.
+Mientras el alumno está «fuera» por cualquiera de las señales, el examen se oculta. Cada salida guarda en la hoja **qué señal la provocó** (`motivos_salida`, por ejemplo `reduced,hidden`): si en algún dispositivo salen salidas que no esperas, esa columna dice la causa.
 
 **Lo que ninguna web puede detectar.** En un iPad, una app flotante (Slide Over) que se coloca encima **sin reducir ni quitar el foco a la ventana** no emite ninguna señal. Lo mismo ocurre con un móvil o un papel junto al ordenador. La medida eficaz para esos casos es el **Acceso guiado** del iPad (o el modo de app única del centro), que además impide abrir apps flotantes. Si en algún dispositivo una salida no se cuenta, abre `diagnostico.html` en él: muestra en directo qué señales emite.
 
@@ -138,7 +138,7 @@ Si actualizas desde una versión anterior: los exámenes ya publicados con vigil
 
 En **Mis exámenes** pulsa **Ver resultados** para abrir la hoja `R_<id>` de ese examen, con una fila por envío:
 
-`fecha | nombre | grupo | aciertos | errores | blancos | nota | duracion_min | posible_duplicado | respuestas_json | salidas | segundos_fuera | tipo_envio | envio_id`
+`fecha | nombre | grupo | aciertos | errores | blancos | nota | duracion_min | posible_duplicado | respuestas_json | salidas | segundos_fuera | tipo_envio | envio_id | motivos_salida`
 
 `envio_id` es un identificador interno que evita filas repetidas si un envío se reintenta. `posible_duplicado` es `TRUE` si ya había un envío con el mismo nombre y grupo (sin tener en cuenta tildes, mayúsculas ni espacios). No se bloquea el envío; solo se marca para que lo revises.
 

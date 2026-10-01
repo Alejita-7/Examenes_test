@@ -96,23 +96,25 @@ Reglas:
 
 1. Abre `admin.html` e introduce tu token (se guarda solo en tu navegador).
 2. En **Crear examen**, sube el archivo (o pega el texto). Verás una vista previa con la respuesta correcta marcada; revisa que sea la que esperas. Si hay errores, la pantalla te dice en qué pregunta.
-3. Rellena los ajustes: título, grupo, tiempo límite, código de acceso (opcional), barajar preguntas y opciones, mostrar la nota al terminar, permitir nota negativa y vigilar salidas.
+3. Rellena los ajustes: título, grupo, tiempo límite, código de acceso (opcional), barajar preguntas y opciones, mostrar la nota al terminar, permitir nota negativa y vigilar salidas (con cuántas salidas se permiten).
 4. **Publicar examen.** Obtendrás un **enlace** y un **código QR** para dárselos a los alumnos.
 
 ### Examen vigilado (control de salidas)
 
-Al publicar, la casilla **«Vigilar salidas»** viene marcada por defecto. Con ella:
+Al publicar, la casilla **«Vigilar salidas»** viene marcada, con **3 salidas permitidas** (puedes cambiar el número, de 0 a 20). Con ella:
 
-- Si el alumno **cambia de pestaña, de ventana o de aplicación**, o bloquea el dispositivo, el examen **se envía automáticamente** tal como esté y se registra la salida.
-- La pantalla inicial avisa al alumno de que el examen está vigilado.
-- Durante el examen se desactivan **copiar, cortar, pegar, el menú contextual y seleccionar texto** (frena la copia casual; no es infalible).
+- Cada vez que el alumno **cambia de pestaña, de ventana o de aplicación**, o bloquea el dispositivo, se **cuenta una salida** y se mide el **tiempo que está fuera**. Al volver ve un aviso con las salidas que lleva y las que le quedan.
+- Mientras no supere el límite, el alumno **puede seguir con el examen**: una notificación o un toque accidental no le cuesta la nota.
+- Al **superar las salidas permitidas** (con 3, a la cuarta), el examen **se envía automáticamente** tal como esté.
+- Las salidas y el tiempo fuera **quedan siempre registrados**, tanto si el alumno envía el examen él mismo como si se envía solo o se acaba el tiempo.
+- La pantalla inicial explica la norma al alumno. Durante el examen se desactivan **copiar, cortar, pegar, el menú contextual y seleccionar texto** (frena la copia casual; no es infalible).
 - En la hoja de resultados aparecen cuatro columnas más: `salidas`, `segundos_fuera`, `tipo_envio` (`manual`, `tiempo` o `salida`) y `envio_id`.
 
-La nota se calcula con normalidad: la app **no pone un 0 automático** al que sale. Lo que ves en `tipo_envio` = `salida` es una señal para que decidas tú, porque una notificación o un toque accidental también pueden provocarlo.
+La nota se calcula con normalidad: la app **no pone un 0 automático**. Las columnas `salidas` y `segundos_fuera` son una señal para que decidas tú.
 
-**Límites que conviene conocer.** Una web puede detectar que el alumno se va, pero no impedirlo, ni ver otros dispositivos (por ejemplo, un móvil al lado). Para un bloqueo real en iPad, usa el **Acceso guiado** del propio iPad (*Ajustes → Accesibilidad → Acceso guiado*; se inicia con triple clic en el botón lateral) o el modo de app única que el centro puede activar desde su sistema de gestión de dispositivos. Se complementa con esta vigilancia.
+**Límites que conviene conocer.** Una web puede detectar que el alumno se va, pero no impedirlo, ni ver otros dispositivos (por ejemplo, un móvil al lado). El registro lo envía el navegador del alumno. Si el alumno sale y no vuelve a abrir el examen mientras le quedan salidas, no se genera ninguna fila hasta que lo envíe. Para un bloqueo real en iPad, usa el **Acceso guiado** del propio iPad (*Ajustes → Accesibilidad → Acceso guiado*; se inicia con triple clic en el botón lateral) o el modo de app única que el centro puede activar desde su sistema de gestión de dispositivos. Se complementa con esta vigilancia.
 
-Si actualizas desde una versión anterior: los exámenes ya publicados **no** quedan vigilados (publica de nuevo los que quieras vigilar), y las hojas `R_<id>` antiguas reciben las columnas nuevas automáticamente.
+Si actualizas desde una versión anterior: los exámenes ya publicados con vigilancia pasan a tener 3 salidas permitidas, los que se publicaron sin vigilancia siguen sin vigilar, y las hojas `R_<id>` antiguas reciben las columnas nuevas automáticamente.
 
 ### Ver resultados
 

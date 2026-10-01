@@ -1,0 +1,6 @@
+# Exámenes con soluciones: nunca se suben (el repositorio es público)
+*.gift
+*.txt
+
+node_modules/
+.DS_Store

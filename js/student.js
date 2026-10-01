@@ -450,7 +450,7 @@ function renderExam(session) {
     h("h2", {}, "⚠ Examen oculto"),
     h("p", {}, h("strong", {}, "Vuelve a la pantalla completa del examen para continuar.")),
     h("p", {}, "Mientras estés fuera, el examen no se muestra y el tiempo que pasas fuera queda registrado."),
-    h("button", { type: "button", class: "btn", id: "fs-btn", hidden: true, onclick: () => enterFullscreen() }, "Volver a pantalla completa")
+    h("button", { type: "button", class: "btn", id: "fs-btn", hidden: true, onclick: () => { quietUntil = Date.now() + QUIET_MS; reducedSince = 0; enterFullscreen(); } }, "Volver a pantalla completa")
   );
   function showCover(on) {
     cover.hidden = !on;
@@ -490,6 +490,12 @@ function renderExam(session) {
   const signals = { hidden: false, blurred: false, reduced: false, fullscreenLost: false };
   let noFocusSince = 0;
   let pointerOutSince = 0;
+  let reducedSince = 0;
+  // Al empezar (y al volver a pantalla completa con el botón) el navegador cambia de tamaño por sí solo:
+  // durante unos segundos no se vigila, para no contar como salida algo que no hace el alumno.
+  const QUIET_MS = 3000;
+  const REDUCED_GRACE_MS = 1000;
+  let quietUntil = Date.now() + QUIET_MS;
   let fullscreenSeen = false; // solo se exige si el alumno llegó a estar en pantalla completa
   const finePointer = window.matchMedia?.("(pointer: fine)").matches ?? false;
   let focusSeen = false; // hasFocus() solo cuenta si alguna vez ha sido true en este examen
@@ -498,13 +504,16 @@ function renderExam(session) {
   // Actualiza las señales y dice si el alumno está ahora fuera de la pantalla completa del examen.
   function computeAway() {
     signals.hidden = document.hidden;
-    signals.reduced = isReducedWindow({
+    const reducedNow = isReducedWindow({
       innerWidth: window.innerWidth,
       innerHeight: window.innerHeight,
       screenWidth: window.screen?.width,
       screenHeight: window.screen?.height,
       coarse: window.matchMedia?.("(pointer: coarse)").matches ?? false,
     });
+    // La ventana reducida solo cuenta si se mantiene: los cambios de tamaño de un instante no son una salida.
+    reducedSince = reducedNow ? reducedSince || Date.now() : 0;
+    signals.reduced = Boolean(reducedSince && Date.now() - reducedSince >= REDUCED_GRACE_MS);
     if (document.hasFocus()) {
       focusSeen = true;
       noFocusSince = 0;
@@ -522,6 +531,7 @@ function renderExam(session) {
 
   function evaluateAway() {
     if (!watched || sending || finished) return;
+    if (Date.now() < quietUntil && !progress.leftAt) return; // ventana de calma
     const away = computeAway();
     if (away && !progress.leftAt) onLeave();
     else if (!away && progress.leftAt) onReturn();

@@ -2,7 +2,8 @@
 // textContent: nunca se inserta HTML procedente del servidor.
 import { fetchExam, submitExam, beaconSubmit, NetworkError, ConfigError } from "./api.js";
 import { h } from "./dom.js";
-import { isReducedWindow, isAway } from "./presence.js";
+import { isReducedWindow } from "./presence.js";
+import { createWatcher } from "./watch.js";
 import { normalize, seededShuffle, formatClock, penaltyFraction, formatNumber, newSendId } from "./util.js";
 
 const MAX_TEXT = 60;
@@ -63,14 +64,17 @@ function loadJson(key) {
 const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement || null;
 const fsSupported = Boolean(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
 
-// Debe llamarse dentro de un gesto del usuario (pulsar un botón). Si no se puede, se sigue sin ella.
+const fsState = { failed: false }; // true si el navegador ha rechazado la pantalla completa: ya no se exige
+
+// Debe llamarse dentro de un gesto del usuario (pulsar o tocar). Si no se puede, se sigue sin ella.
 async function enterFullscreen() {
   if (!fsSupported || fsElement()) return;
   const el = document.documentElement;
   try {
     await (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+    fsState.failed = false;
   } catch {
-    /* el navegador no la permite: el examen continúa sin exigirla */
+    fsState.failed = true;
   }
 }
 
@@ -82,7 +86,7 @@ function showMessage(title, text, kind = "info") {
 
 // Norma de salidas para el alumno. No menciona cuántas salidas se toleran.
 const EXIT_RULE =
-  "No puedes salir de la pantalla del examen: no cambies de pestaña, de ventana ni de aplicación, ni uses otra web al mismo tiempo. El examen se abre a pantalla completa y solo se muestra así: si sales de la pantalla completa, reduces la ventana, cambias de aplicación o sacas el ratón de la página, el examen se oculta hasta que vuelvas. Cada salida queda registrada con el tiempo que estés fuera y, si continúas saliendo, el examen se enviará automáticamente tal como esté.";
+  "No puedes salir de la pantalla del examen: no cambies de pestaña, de ventana ni de aplicación, ni uses otra web al mismo tiempo. El examen se abre a pantalla completa y solo se muestra así: si reduces la ventana, cambias de aplicación o sales de la pantalla completa, el examen se oculta hasta que vuelvas. Cada salida queda registrada con el tiempo que estés fuera y, si continúas saliendo, el examen se enviará automáticamente tal como esté.";
 
 function scoringText(questions) {
   const ks = new Set((questions ?? []).map((q) => q.options.length));
@@ -216,6 +220,7 @@ function startExam(exam, who) {
   progress.salidas = Number(progress.salidas) || 0;
   progress.segundosFuera = Number(progress.segundosFuera) || 0;
   progress.leftAt = progress.leftAt || null;
+  progress.motivos = Array.isArray(progress.motivos) ? progress.motivos : [];
   store.set(key, JSON.stringify(progress));
   store.set(lastKey(), JSON.stringify(who));
 
@@ -361,6 +366,7 @@ function renderExam(session) {
       segundos_fuera: Math.round(awaySeconds() * 10) / 10,
       envio: motivo,
       envioId: progress.envioId,
+      motivos_salida: progress.motivos.join(","),
     };
   }
 
@@ -443,117 +449,137 @@ function renderExam(session) {
     dialog.showModal();
   }
 
-  // Mientras el alumno está fuera de la pantalla completa, el examen no se puede ver ni contestar.
-  const cover = h(
-    "div",
-    { class: "away-cover", hidden: true, role: "alert" },
-    h("h2", {}, "⚠ Examen oculto"),
-    h("p", {}, h("strong", {}, "Vuelve a la pantalla completa del examen para continuar.")),
-    h("p", {}, "Mientras estés fuera, el examen no se muestra y el tiempo que pasas fuera queda registrado."),
-    h("button", { type: "button", class: "btn", id: "fs-btn", hidden: true, onclick: () => { quietUntil = Date.now() + QUIET_MS; reducedSince = 0; enterFullscreen(); } }, "Volver a pantalla completa")
+  // Cubierta: oculta el examen mientras no esté bien colocado (antes de empezar) o el alumno esté fuera.
+  const QUIET_MS = 2500; // tras pedir pantalla completa, el navegador cambia de tamaño por sí solo
+  let quietUntil = 0;
+  const coverTitle = h("h2");
+  const coverMain = h("p", {}, h("strong"));
+  const coverNote = h("p");
+  const fsBtn = h(
+    "button",
+    {
+      type: "button",
+      class: "btn",
+      hidden: true,
+      onclick: () => {
+        quietUntil = Date.now() + QUIET_MS;
+        fsState.failed = false;
+        enterFullscreen();
+      },
+    },
+    "Pasar a pantalla completa"
   );
-  function showCover(on) {
-    cover.hidden = !on;
-    // El botón solo aparece si salió de la pantalla completa (necesita un gesto para volver a entrar).
-    cover.querySelector("#fs-btn").hidden = !(on && signals.fullscreenLost);
-    if (!sending) fieldset.disabled = on;
+  const cover = h("div", { class: "away-cover", hidden: true, role: "alert" }, coverTitle, coverMain, coverNote, fsBtn);
+
+  function applyCover(reason) {
+    if (reason === "prepare") {
+      coverTitle.textContent = "Pon el examen a pantalla completa";
+      coverMain.firstChild.textContent = "Toca el botón (o cualquier parte de la pantalla) para empezar.";
+      coverNote.textContent = "Esto todavía no cuenta como salida.";
+    } else if (reason === "away") {
+      coverTitle.textContent = "⚠ Examen oculto";
+      coverMain.firstChild.textContent = "Vuelve a la pantalla completa del examen para continuar.";
+      coverNote.textContent = "Mientras estés fuera, el examen no se muestra y el tiempo que pasas fuera queda registrado.";
+    }
+    cover.hidden = !reason;
+    fsBtn.hidden = !(reason && fsSupported && !fsElement());
+    if (!sending) fieldset.disabled = Boolean(reason);
   }
 
-  function onLeave() {
+  function onLeave({ reason, since }) {
     if (!watched || sending || finished || progress.leftAt) return;
-    showCover(true);
     progress.salidas += 1;
-    progress.leftAt = Date.now();
+    progress.leftAt = since; // desde que empezó la situación, no desde que se confirmó
+    progress.motivos.push(reason);
     save();
     // Solo al superar el límite se avisa al servidor. La página puede congelarse al cambiar
     // de app, así que se usa sendBeacon; al volver se reenvía con el mismo envioId.
     if (overLimit()) beaconSubmit(buildPayload("salida"));
   }
 
-  function onReturn() {
+  function onReturn({ awayMs }) {
     if (!watched || sending || finished || !progress.leftAt) return;
-    progress.segundosFuera += (Date.now() - progress.leftAt) / 1000;
+    progress.segundosFuera += awayMs / 1000;
     progress.leftAt = null;
     save();
-    showCover(false);
     if (overLimit()) send("salida");
     else warnReturn();
   }
 
   /*
-   * ¿Sigue el alumno en la pantalla del examen? Se combinan varias señales, porque ninguna basta:
-   * - página oculta (otra pestaña/app, pantalla bloqueada),
-   * - evento blur (otra ventana activa),
-   * - document.hasFocus() en false durante 1 s (el iPad no siempre emite blur en pantalla dividida),
-   * - ventana reducida (pantalla dividida, Slide Over, Stage Manager en tabletas).
+   * ¿Sigue el alumno en la pantalla del examen? La decisión la toma js/watch.js a partir de varias señales
+   * (página oculta, foco, ventana reducida, pantalla completa, ratón). Aquí solo se recogen las señales.
    */
-  const signals = { hidden: false, blurred: false, reduced: false, fullscreenLost: false };
-  let noFocusSince = 0;
-  let pointerOutSince = 0;
-  let reducedSince = 0;
-  // Al empezar (y al volver a pantalla completa con el botón) el navegador cambia de tamaño por sí solo:
-  // durante unos segundos no se vigila, para no contar como salida algo que no hace el alumno.
-  const QUIET_MS = 3000;
-  const REDUCED_GRACE_MS = 1000;
-  let quietUntil = Date.now() + QUIET_MS;
-  let fullscreenSeen = false; // solo se exige si el alumno llegó a estar en pantalla completa
-  const finePointer = window.matchMedia?.("(pointer: fine)").matches ?? false;
-  let focusSeen = false; // hasFocus() solo cuenta si alguna vez ha sido true en este examen
+  // En ordenadores salir de la pantalla completa (Esc) no es un gesto natural: margen más corto que en tabletas.
+  const watcher = createWatcher(window.matchMedia?.("(pointer: fine)").matches ? { grace: { fullscreenLost: 1500 } } : {});
+  let wasReduced = false;
+  let blurred = false;
+  let pageHidden = false;
+  let pointerOut = false;
+  let focusSeen = false; // hasFocus() solo cuenta si alguna vez ha sido true
+  let fullscreenSeen = false; // la pérdida de pantalla completa solo cuenta si estuvo en ella
   let watchTimer = null;
 
-  // Actualiza las señales y dice si el alumno está ahora fuera de la pantalla completa del examen.
-  function computeAway() {
-    signals.hidden = document.hidden;
-    const reducedNow = isReducedWindow({
+  function collectInputs() {
+    const settling = Date.now() < quietUntil;
+    if (document.hasFocus()) focusSeen = true;
+    if (fsElement()) fullscreenSeen = true;
+    wasReduced = isReducedWindow({
       innerWidth: window.innerWidth,
       innerHeight: window.innerHeight,
       screenWidth: window.screen?.width,
       screenHeight: window.screen?.height,
       coarse: window.matchMedia?.("(pointer: coarse)").matches ?? false,
+      wasReduced,
     });
-    // La ventana reducida solo cuenta si se mantiene: los cambios de tamaño de un instante no son una salida.
-    reducedSince = reducedNow ? reducedSince || Date.now() : 0;
-    signals.reduced = Boolean(reducedSince && Date.now() - reducedSince >= REDUCED_GRACE_MS);
-    if (document.hasFocus()) {
-      focusSeen = true;
-      noFocusSince = 0;
-    } else if (focusSeen && !noFocusSince) {
-      noFocusSince = Date.now();
-    }
-    if (fsElement()) fullscreenSeen = true;
-    signals.fullscreenLost = fullscreenSeen && !fsElement();
-    return isAway({
-      ...signals,
-      noFocusMs: noFocusSince ? Date.now() - noFocusSince : 0,
-      pointerOutMs: pointerOutSince ? Date.now() - pointerOutSince : 0,
-    });
+    return {
+      hidden: document.hidden || pageHidden,
+      blurred,
+      noFocus: focusSeen && !document.hasFocus(),
+      pointerOut,
+      reduced: wasReduced && !settling,
+      fullscreenLost: fullscreenSeen && !fsElement() && !settling,
+      needsFullscreen: fsSupported && !fsState.failed && !fsElement(),
+    };
   }
 
   function evaluateAway() {
     if (!watched || sending || finished) return;
-    if (Date.now() < quietUntil && !progress.leftAt) return; // ventana de calma
-    const away = computeAway();
-    if (away && !progress.leftAt) onLeave();
-    else if (!away && progress.leftAt) onReturn();
-    if (!cover.hidden) cover.querySelector("#fs-btn").hidden = !signals.fullscreenLost;
+    const r = watcher.update(collectInputs(), Date.now());
+    if (r.leave) onLeave(r.leave);
+    if (r.back) onReturn(r.back);
+    applyCover(r.coverReason);
   }
 
   if (watched) {
     document.addEventListener("visibilitychange", evaluateAway);
-    window.addEventListener("blur", () => { signals.blurred = true; evaluateAway(); });
-    window.addEventListener("focus", () => { signals.blurred = false; evaluateAway(); });
-    window.addEventListener("pagehide", () => { signals.hidden = true; onLeave(); });
-    window.addEventListener("pageshow", evaluateAway);
+    window.addEventListener("blur", () => { blurred = true; evaluateAway(); });
+    window.addEventListener("focus", () => { blurred = false; evaluateAway(); });
+    window.addEventListener("pagehide", () => { pageHidden = true; evaluateAway(); });
+    window.addEventListener("pageshow", () => { pageHidden = false; evaluateAway(); });
     window.addEventListener("resize", evaluateAway);
     window.addEventListener("orientationchange", evaluateAway);
     document.addEventListener("fullscreenchange", evaluateAway);
     document.addEventListener("webkitfullscreenchange", evaluateAway);
-    if (finePointer) {
+    if (window.matchMedia?.("(pointer: fine)").matches) {
       // Ordenador: el ratón que sale de la página (otra ventana, otro monitor) y no vuelve en 2 s.
-      document.documentElement.addEventListener("mouseleave", () => { pointerOutSince = pointerOutSince || Date.now(); });
-      document.documentElement.addEventListener("mouseenter", () => { pointerOutSince = 0; evaluateAway(); });
+      document.documentElement.addEventListener("mouseleave", () => { pointerOut = true; });
+      document.documentElement.addEventListener("mouseenter", () => { pointerOut = false; evaluateAway(); });
     }
+    // Un toque en cualquier parte devuelve la pantalla completa sin que el alumno tenga que buscar nada:
+    // así los gestos naturales de la tableta que la quitan no cuestan una salida.
+    document.addEventListener(
+      "pointerdown",
+      () => {
+        if (fsSupported && !fsElement() && !fsState.failed && (fullscreenSeen || !watcher.isArmed())) {
+          quietUntil = Date.now() + QUIET_MS;
+          enterFullscreen();
+        }
+      },
+      true
+    );
     watchTimer = setInterval(evaluateAway, 500);
+    evaluateAway(); // muestra la cubierta de preparación si todavía no está a pantalla completa
   }
 
   const bar = h("div", { class: "exam-bar" }, counter, limitSeconds ? timer : null);
@@ -592,16 +618,12 @@ function renderExam(session) {
   }
 
   // Si el alumno salió y la página se recargó o se cerró, se suma el tiempo que estuvo fuera.
-  // Si ya superó las salidas permitidas, el examen se envía al volver.
+  // La vigilancia vuelve a empezar desde cero (fase de preparación), así que no se cuenta otra salida.
   if (watched && progress.leftAt) {
-    if (computeAway() && !overLimit()) {
-      showCover(true); // sigue fuera (por ejemplo, recargó la página en pantalla dividida): no cuenta otra salida
-    } else {
-      progress.segundosFuera += (Date.now() - progress.leftAt) / 1000;
-      progress.leftAt = null;
-      save();
-      if (!overLimit()) warnReturn();
-    }
+    progress.segundosFuera += (Date.now() - progress.leftAt) / 1000;
+    progress.leftAt = null;
+    save();
+    if (!overLimit()) warnReturn();
   }
   if (watched && overLimit() && !sending) send("salida");
 }

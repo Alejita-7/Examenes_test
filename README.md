@@ -128,6 +128,8 @@ La nota se calcula con normalidad: la app **no pone un 0 automático**. Las colu
 
 Mientras el alumno está «fuera» por cualquiera de ellas, el examen se oculta.
 
+Para no contar como salida lo que no hace el alumno, no se vigila durante los **3 primeros segundos** del examen (y otros 3 tras pulsar «Volver a pantalla completa»), porque el navegador cambia de tamaño al entrar en pantalla completa. Además, una ventana reducida solo cuenta si se mantiene **más de 1 segundo**.
+
 **Lo que ninguna web puede detectar.** En un iPad, una app flotante (Slide Over) que se coloca encima **sin reducir ni quitar el foco a la ventana** no emite ninguna señal. Lo mismo ocurre con un móvil o un papel junto al ordenador. La medida eficaz para esos casos es el **Acceso guiado** del iPad (o el modo de app única del centro), que además impide abrir apps flotantes. Si en algún dispositivo una salida no se cuenta, abre `diagnostico.html` en él: muestra en directo qué señales emite.
 
 Si actualizas desde una versión anterior: los exámenes ya publicados con vigilancia pasan a tener 3 salidas permitidas, los que se publicaron sin vigilancia siguen sin vigilar, y las hojas `R_<id>` antiguas reciben las columnas nuevas automáticamente.

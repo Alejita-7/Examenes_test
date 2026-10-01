@@ -13,12 +13,14 @@ const SHEET_EXAMS = 'Examenes';
 const EXAM_HEADERS = [
   'id', 'titulo', 'grupo_destino', 'activo', 'codigo_acceso', 'tiempo_min',
   'barajar_preguntas', 'barajar_opciones', 'mostrar_nota', 'permitir_negativa',
-  'preguntas_json', 'creado'
+  'preguntas_json', 'creado', 'control_salidas'
 ];
 const RESULT_HEADERS = [
   'fecha', 'nombre', 'grupo', 'aciertos', 'errores', 'blancos', 'nota',
-  'duracion_min', 'posible_duplicado', 'respuestas_json'
+  'duracion_min', 'posible_duplicado', 'respuestas_json',
+  'salidas', 'segundos_fuera', 'tipo_envio', 'envio_id'
 ];
+const ENVIO_TYPES = ['manual', 'tiempo', 'salida'];
 const MAX_TEXT = 60;          // nombre y grupo
 const WARN_CHARS = 45000;     // aviso: cerca del límite de celda
 const MAX_CHARS = 49000;      // límite duro (la celda admite 50 000)
@@ -94,7 +96,8 @@ function getExam_(params) {
     titulo: exam.titulo,
     n_preguntas: questions.length,
     tiempo_min: exam.tiempo_min,
-    requiere_codigo: exam.codigo_acceso !== ''
+    requiere_codigo: exam.codigo_acceso !== '',
+    control_salidas: exam.control_salidas
   };
 
   var codeCheck = checkCode_(exam, params.code);
@@ -116,6 +119,7 @@ function getExam_(params) {
       barajar_preguntas: exam.barajar_preguntas,
       barajar_opciones: exam.barajar_opciones,
       mostrar_nota: exam.mostrar_nota,
+      control_salidas: exam.control_salidas,
       questions: questions.map(function (q) {
         return {
           id: q.id,
@@ -168,6 +172,10 @@ function submit_(p) {
 
   var dur = Number(p.duracion_min);
   var duracion = isFinite(dur) && dur >= 0 ? Math.round(dur * 100) / 100 : '';
+  var salidas = clampNumber_(p.salidas, 999, 0);
+  var segundosFuera = clampNumber_(p.segundos_fuera, 86400, 1);
+  var tipoEnvio = ENVIO_TYPES.indexOf(p.envio) !== -1 ? p.envio : 'manual';
+  var envioId = typeof p.envioId === 'string' ? p.envioId.trim().slice(0, 64) : '';
 
   var lock = LockService.getScriptLock();
   try {
@@ -178,19 +186,33 @@ function submit_(p) {
   try {
     var sheet = getResultsSheet_(exam.id);
     var rows = sheet.getDataRange().getValues();
-    var n = normalize_(nombre);
-    var g = normalize_(grupo);
-    var duplicado = false;
-    for (var i = 1; i < rows.length; i++) {
-      if (normalize_(rows[i][1]) === n && normalize_(rows[i][2]) === g) {
-        duplicado = true;
-        break;
+
+    // Un mismo envío (mismo envioId) nunca crea dos filas: solo completa los datos de salidas.
+    var sameSend = -1;
+    if (envioId) {
+      for (var k = 1; k < rows.length; k++) {
+        if (String(rows[k][13]) === envioId) { sameSend = k; break; }
       }
     }
-    appendRowText_(sheet, [
-      new Date(), nombre, grupo, result.aciertos, result.errores, result.blancos,
-      result.nota, duracion, duplicado, JSON.stringify(answers)
-    ], [2, 3]);
+    if (sameSend !== -1) {
+      sheet.getRange(sameSend + 1, 11).setValue(Math.max(Number(rows[sameSend][10]) || 0, salidas));
+      sheet.getRange(sameSend + 1, 12).setValue(Math.max(Number(rows[sameSend][11]) || 0, segundosFuera));
+    } else {
+      var n = normalize_(nombre);
+      var g = normalize_(grupo);
+      var duplicado = false;
+      for (var i = 1; i < rows.length; i++) {
+        if (normalize_(rows[i][1]) === n && normalize_(rows[i][2]) === g) {
+          duplicado = true;
+          break;
+        }
+      }
+      appendRowText_(sheet, [
+        new Date(), nombre, grupo, result.aciertos, result.errores, result.blancos,
+        result.nota, duracion, duplicado, JSON.stringify(answers),
+        salidas, segundosFuera, tipoEnvio, envioId
+      ], [2, 3, 14]);
+    }
   } finally {
     lock.releaseLock();
   }
@@ -249,7 +271,8 @@ function createExam_(p) {
       toBool_(p.mostrar_nota),
       toBool_(p.permitir_negativa),
       json,
-      new Date()
+      new Date(),
+      toBool_(p.control_salidas)
     ], [1, 3, 5]);
     getResultsSheet_(id);
   } finally {
@@ -289,6 +312,7 @@ function listExams_(params) {
       titulo: ex.titulo,
       grupo_destino: ex.grupo_destino,
       activo: ex.activo,
+      control_salidas: ex.control_salidas,
       codigo_acceso: ex.codigo_acceso,
       tiempo_min: ex.tiempo_min,
       n_preguntas: JSON.parse(ex.preguntas_json).length,
@@ -372,6 +396,14 @@ function normalize_(s) {
     .trim();
 }
 
+// Número entero o con `decimals` decimales, entre 0 y max; 0 si no es un número.
+function clampNumber_(v, max, decimals) {
+  var n = Number(v);
+  if (!isFinite(n) || n < 0) return 0;
+  var f = Math.pow(10, decimals || 0);
+  return Math.round(Math.min(n, max) * f) / f;
+}
+
 function toBool_(v) {
   return v === true || String(v).toUpperCase() === 'TRUE';
 }
@@ -380,11 +412,12 @@ function newExamId_() {
   var existing = {};
   readExams_().forEach(function (e) { existing[e.id] = true; });
   var id;
-  do {
+  for (var tries = 0; tries < 20; tries++) {
     // Empieza por letra: Sheets convertiría "545297e4" en el número 5452970000.
     id = 'x' + Utilities.getUuid().replace(/-/g, '').slice(0, 7);
-  } while (existing[id]);
-  return id;
+    if (!existing[id]) return id;
+  }
+  throw new Error('No se pudo generar un identificador único.');
 }
 
 // Valida y limpia las preguntas recibidas del panel (el servidor no se fía del cliente).
@@ -444,6 +477,13 @@ function appendRowText_(sheet, values, textCols) {
   sheet.getRange(row, 1, 1, values.length).setValues([values]);
 }
 
+// Si la hoja es de una versión anterior (menos columnas), añade las cabeceras que faltan.
+function ensureHeaders_(sheet, headers) {
+  for (var i = sheet.getLastColumn(); i < headers.length; i++) {
+    sheet.getRange(1, i + 1).setValue(headers[i]);
+  }
+}
+
 function getExamsSheet_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sh = ss.getSheetByName(SHEET_EXAMS);
@@ -452,6 +492,8 @@ function getExamsSheet_() {
     sh.appendRow(EXAM_HEADERS);
     sh.setFrozenRows(1);
     setTextColumns_(sh, [1, 3, 5]);
+  } else {
+    ensureHeaders_(sh, EXAM_HEADERS);
   }
   return sh;
 }
@@ -464,7 +506,9 @@ function getResultsSheet_(examId) {
     sh = ss.insertSheet(name);
     sh.appendRow(RESULT_HEADERS);
     sh.setFrozenRows(1);
-    setTextColumns_(sh, [2, 3]);
+    setTextColumns_(sh, [2, 3, 14]);
+  } else {
+    ensureHeaders_(sh, RESULT_HEADERS);
   }
   return sh;
 }
@@ -487,7 +531,8 @@ function readExams_() {
       mostrar_nota: toBool_(r[8]),
       permitir_negativa: toBool_(r[9]),
       preguntas_json: String(r[10]),
-      creado: r[11]
+      creado: r[11],
+      control_salidas: toBool_(r[12])
     });
   }
   return out;

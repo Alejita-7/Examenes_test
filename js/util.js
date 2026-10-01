@@ -90,3 +90,12 @@ function defaultRandom(max) {
   globalThis.crypto.getRandomValues(buf);
   return buf[0] % max;
 }
+
+/** Identificador aleatorio de un envío: permite reenviar sin crear filas repetidas. */
+export function newSendId() {
+  const c = globalThis.crypto;
+  if (c?.randomUUID) return c.randomUUID();
+  const buf = new Uint8Array(16);
+  c.getRandomValues(buf);
+  return [...buf].map((b) => b.toString(16).padStart(2, "0")).join("");
+}

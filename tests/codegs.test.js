@@ -162,3 +162,78 @@ test("regresión: un código de acceso con forma numérica se compara bien", () 
   assert.equal(env.get({ action: "exam", id, code: "2E4567" }).ok, true);
   assert.equal(env.get({ action: "list", token: "secreto" }) .exams[0].codigo_acceso, "2e4567");
 });
+
+/* ------------------------- control de salidas ------------------------- */
+
+// Los arrays creados dentro del sandbox de vm son de otro "realm": se copian antes de comparar.
+const plain = (x) => JSON.parse(JSON.stringify(x));
+
+test("control_salidas se guarda, se anuncia al alumno y aparece en la lista", () => {
+  const env = makeEnv();
+  const on = publish(env, { control_salidas: true });
+  const off = publish(env, { control_salidas: false });
+  assert.equal(env.get({ action: "exam", id: on }).exam.control_salidas, true);
+  assert.equal(env.get({ action: "exam", id: off }).exam.control_salidas, false);
+  const byId = Object.fromEntries(env.get({ action: "list", token: "secreto" }).exams.map((e) => [e.id, e]));
+  assert.equal(byId[on].control_salidas, true);
+  assert.equal(byId[off].control_salidas, false);
+});
+
+test("con código de acceso, control_salidas llega en info antes de pedir el código", () => {
+  const env = makeEnv();
+  const id = publish(env, { control_salidas: true, codigo_acceso: "Luz42" });
+  assert.equal(env.get({ action: "exam", id }).info.control_salidas, true);
+});
+
+test("un examen anterior (sin la columna) no está vigilado", () => {
+  const env = makeEnv();
+  const id = publish(env);
+  env.sheets.get("Examenes").rows[1].length = 12; // fila de la versión anterior
+  assert.equal(env.get({ action: "exam", id }).exam.control_salidas, false);
+});
+
+test("el envío registra salidas, segundos fuera y tipo de envío", () => {
+  const env = makeEnv();
+  const id = publish(env, { control_salidas: true });
+  const r = env.post({
+    action: "submit", examId: id, nombre: "Ana", grupo: "2A", respuestas: { q1: "a" },
+    salidas: 1, segundos_fuera: 12.34, envio: "salida", envioId: "abc-1",
+  });
+  assert.equal(r.ok, true);
+  const rows = env.sheets.get(`R_${id}`).rows;
+  assert.deepEqual(plain(rows[0].slice(10)), ["salidas", "segundos_fuera", "tipo_envio", "envio_id"]);
+  assert.deepEqual(plain(rows[1].slice(10)), [1, 12.3, "salida", "abc-1"]);
+});
+
+test("valores de vigilancia saneados (tipo desconocido, negativos, texto)", () => {
+  const env = makeEnv();
+  const id = publish(env);
+  env.post({ action: "submit", examId: id, nombre: "A", grupo: "B", respuestas: {}, salidas: -5, segundos_fuera: "x", envio: "hack", envioId: 7 });
+  assert.deepEqual(plain(env.sheets.get(`R_${id}`).rows[1].slice(10)), [0, 0, "manual", ""]);
+});
+
+test("el mismo envioId no crea una segunda fila y completa los segundos fuera", () => {
+  const env = makeEnv();
+  const id = publish(env, { control_salidas: true });
+  const base = { action: "submit", examId: id, nombre: "Ana", grupo: "2A", respuestas: { q1: "a", q2: "b" }, envio: "salida", envioId: "uno" };
+  const first = env.post({ ...base, salidas: 1, segundos_fuera: 0 });   // aviso al salir (sendBeacon)
+  const second = env.post({ ...base, salidas: 1, segundos_fuera: 45 }); // reenvío al volver
+  assert.equal(first.ok && second.ok, true);
+  assert.equal(second.nota, first.nota);
+  const rows = env.sheets.get(`R_${id}`).rows;
+  assert.equal(rows.length, 2, "una sola fila de datos");
+  assert.deepEqual(plain(rows[1].slice(10, 12)), [1, 45]);
+  assert.equal(rows[1][8], false, "no se marca como duplicado de sí mismo");
+  // otro alumno con otro envioId sí es una fila nueva
+  env.post({ ...base, envioId: "dos", nombre: "Luis" });
+  assert.equal(env.sheets.get(`R_${id}`).rows.length, 3);
+});
+
+test("hojas de resultados antiguas reciben las columnas nuevas", () => {
+  const env = makeEnv();
+  const id = publish(env);
+  const sheet = env.sheets.get(`R_${id}`);
+  sheet.rows[0].length = 10; // cabecera de la versión anterior
+  env.post({ action: "submit", examId: id, nombre: "A", grupo: "B", respuestas: {}, envioId: "x1" });
+  assert.deepEqual(plain(sheet.rows[0].slice(10)), ["salidas", "segundos_fuera", "tipo_envio", "envio_id"]);
+});

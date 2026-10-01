@@ -35,6 +35,7 @@ class FakeSheet {
     };
   }
   getLastRow() { return this.rows.length; }
+  getLastColumn() { return this.rows.reduce((m, r) => Math.max(m, r.length), 0); }
   getMaxRows() { return 1000; }
   getSheetId() { return this.id; }
   setFrozenRows() {}
@@ -55,7 +56,7 @@ export function makeEnv(token = "secreto", { uuid: uuidFn } = {}) {
     SpreadsheetApp: { getActiveSpreadsheet: () => ss },
     PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => props[k] ?? null }) },
     LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
-    Utilities: { getUuid: uuidFn ?? (() => `0000000${++uuid}-aaaa-bbbb-cccc-dddddddddddd`) },
+    Utilities: { getUuid: uuidFn ?? (() => `${String(++uuid).padStart(8, "0")}-aaaa-bbbb-cccc-dddddddddddd`) },
     ContentService: {
       MimeType: { JSON: "json" },
       createTextOutput: (s) => ({ s, setMimeType() { return this; } }),

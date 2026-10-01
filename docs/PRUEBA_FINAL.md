@@ -77,6 +77,8 @@ Publica un examen con **Vigilar salidas** marcado y **2 salidas permitidas** (as
 - [ ] Prueba con otro nombre: sal **una vez** y envía tú el examen con el botón. La fila debe tener `salidas` = 1, `tipo_envio` = `manual` y `segundos_fuera` > 0.
 - [ ] Prueba con otro nombre: sal una vez y **recarga la página** sin enviar. Al volver a entrar con el mismo nombre y grupo, sigues dentro del examen con el contador en «1 de 2».
 - [ ] Prueba cambiar de pestaña y bloquear la pantalla: ambas cuentan como salida.
+- [ ] **Pantalla dividida (iPad):** con el examen en una mitad y otra web en la otra, el examen cuenta **1 salida** (por el cambio de tamaño de la ventana), aunque no toques la otra web, y el tiempo corre hasta que vuelves a pantalla completa. Si no cuenta, abre `diagnostico.html` en el iPad, repite la prueba y revisa qué señales aparecen.
+- [ ] Girar el iPad (vertical/horizontal) **no** cuenta como salida.
 - [ ] En un examen **sin** vigilar, cambiar de app no cuenta nada ni avisa.
 - [ ] Un examen publicado antes de esta versión sigue funcionando.
 

@@ -2,6 +2,7 @@
 // textContent: nunca se inserta HTML procedente del servidor.
 import { fetchExam, submitExam, beaconSubmit, NetworkError, ConfigError } from "./api.js";
 import { h } from "./dom.js";
+import { isReducedWindow, isAway } from "./presence.js";
 import { normalize, seededShuffle, formatClock, penaltyFraction, formatNumber, newSendId } from "./util.js";
 
 const MAX_TEXT = 60;
@@ -398,6 +399,7 @@ function renderExam(session) {
     }
 
     finished = true;
+    clearInterval(watchTimer);
     store.remove(key);
     store.remove(lastKey());
     showDone(res, motivo);
@@ -450,12 +452,48 @@ function renderExam(session) {
     else warnReturn();
   }
 
+  /*
+   * ¿Sigue el alumno en la pantalla del examen? Se combinan varias señales, porque ninguna basta:
+   * - página oculta (otra pestaña/app, pantalla bloqueada),
+   * - evento blur (otra ventana activa),
+   * - document.hasFocus() en false durante 1 s (el iPad no siempre emite blur en pantalla dividida),
+   * - ventana reducida (pantalla dividida, Slide Over, Stage Manager en tabletas).
+   */
+  const signals = { hidden: false, blurred: false, reduced: false };
+  let noFocusSince = 0;
+  let focusSeen = false; // hasFocus() solo cuenta si alguna vez ha sido true en este examen
+  let watchTimer = null;
+
+  function evaluateAway() {
+    if (!watched || sending || finished) return;
+    signals.hidden = document.hidden;
+    signals.reduced = isReducedWindow({
+      innerWidth: window.innerWidth,
+      innerHeight: window.innerHeight,
+      screenWidth: window.screen?.width,
+      screenHeight: window.screen?.height,
+      coarse: window.matchMedia?.("(pointer: coarse)").matches ?? false,
+    });
+    if (document.hasFocus()) {
+      focusSeen = true;
+      noFocusSince = 0;
+    } else if (focusSeen && !noFocusSince) {
+      noFocusSince = Date.now();
+    }
+    const away = isAway({ ...signals, noFocusMs: noFocusSince ? Date.now() - noFocusSince : 0 });
+    if (away && !progress.leftAt) onLeave();
+    else if (!away && progress.leftAt) onReturn();
+  }
+
   if (watched) {
-    document.addEventListener("visibilitychange", () => (document.hidden ? onLeave() : onReturn()));
-    window.addEventListener("pagehide", onLeave);
-    window.addEventListener("blur", onLeave);
-    window.addEventListener("focus", onReturn);
-    window.addEventListener("pageshow", onReturn);
+    document.addEventListener("visibilitychange", evaluateAway);
+    window.addEventListener("blur", () => { signals.blurred = true; evaluateAway(); });
+    window.addEventListener("focus", () => { signals.blurred = false; evaluateAway(); });
+    window.addEventListener("pagehide", () => { signals.hidden = true; onLeave(); });
+    window.addEventListener("pageshow", evaluateAway);
+    window.addEventListener("resize", evaluateAway);
+    window.addEventListener("orientationchange", evaluateAway);
+    watchTimer = setInterval(evaluateAway, 500);
   }
 
   const bar = h("div", { class: "exam-bar" }, counter, exitsBadge, limitSeconds ? timer : null);

@@ -1,8 +1,8 @@
 // Página del alumno (index.html?e=ID). Todo el contenido del examen se pinta con
 // textContent: nunca se inserta HTML procedente del servidor.
-import { fetchExam, submitExam, NetworkError, ConfigError } from "./api.js";
+import { fetchExam, submitExam, beaconSubmit, NetworkError, ConfigError } from "./api.js";
 import { h } from "./dom.js";
-import { normalize, seededShuffle, formatClock, penaltyFraction, formatNumber } from "./util.js";
+import { normalize, seededShuffle, formatClock, penaltyFraction, formatNumber, newSendId } from "./util.js";
 
 const MAX_TEXT = 60;
 const RETRY_DELAYS = [2000, 4000, 8000];
@@ -160,6 +160,15 @@ function showStart(info, exam) {
         h("p", {}, h("strong", {}, "Cómo se puntúa")),
         scoringText(exam?.questions).map((t) => h("p", {}, t))
       ),
+      info.control_salidas
+        ? h(
+            "div",
+            { class: "notice warn" },
+            h("p", {}, h("strong", {}, "Examen vigilado")),
+            h("p", {}, "Si sales de la pantalla del examen (cambias de pestaña, de ventana o de aplicación, o bloqueas el dispositivo), el examen se enviará automáticamente tal como esté y tu profesor verá que saliste."),
+            h("p", {}, "Copiar y pegar está desactivado durante el examen.")
+          )
+        : null,
       form
     )
   );
@@ -180,6 +189,11 @@ function startExam(exam, who) {
   if (!progress || typeof progress.answers !== "object" || !progress.startedAt) {
     progress = { nombre: who.nombre, grupo: who.grupo, startedAt: Date.now(), answers: {} };
   }
+  // Datos de envío y de vigilancia (también para progresos guardados por versiones anteriores).
+  progress.envioId = progress.envioId || newSendId();
+  progress.salidas = Number(progress.salidas) || 0;
+  progress.segundosFuera = Number(progress.segundosFuera) || 0;
+  progress.leftAt = progress.leftAt || null;
   store.set(key, JSON.stringify(progress));
   store.set(lastKey(), JSON.stringify(who));
 
@@ -203,8 +217,10 @@ function renderExam(session) {
   const { exam, questions, who, key, progress } = session;
   const total = questions.length;
   const limitSeconds = (Number(exam.tiempo_min) || 0) * 60;
+  const watched = Boolean(exam.control_salidas);
   let timerId = null;
   let sending = false;
+  let finished = false;
 
   const counter = h("span");
   const timer = h("span", { class: "timer", role: "timer" });
@@ -303,21 +319,30 @@ function renderExam(session) {
     dialog.showModal();
   }
 
-  async function send(auto = false) {
-    if (sending) return;
-    sending = true;
-    clearInterval(timerId);
-    lock();
+  function buildPayload(motivo) {
     const respuestas = {};
     for (const q of exam.questions) respuestas[q.id] = progress.answers[q.id] ?? null;
-    const payload = {
+    return {
       examId,
       nombre: who.nombre,
       grupo: who.grupo,
       code: who.code,
       respuestas,
       duracion_min: Math.round(((Date.now() - progress.startedAt) / 60000) * 100) / 100,
+      salidas: progress.salidas,
+      segundos_fuera: Math.round(progress.segundosFuera * 10) / 10,
+      envio: motivo,
+      envioId: progress.envioId,
     };
+  }
+
+  // motivo: "manual" (botón), "tiempo" (se acabó) o "salida" (cambió de pestaña, ventana o app).
+  async function send(motivo = "manual") {
+    if (sending) return;
+    sending = true;
+    clearInterval(timerId);
+    lock();
+    const payload = buildPayload(motivo);
 
     const showStatus = (kind, text, retry) => {
       status.hidden = false;
@@ -325,9 +350,16 @@ function renderExam(session) {
         h("div", { class: `notice ${kind}`, style: "margin:0" }, h("p", {}, text), retry ? h("div", { class: "actions", style: "margin-top:10px" }, retry) : null)
       );
     };
-    const retryBtn = () => h("button", { class: "btn", type: "button", onclick: () => { sending = false; send(auto); } }, "Reintentar el envío");
+    const retryBtn = () => h("button", { class: "btn", type: "button", onclick: () => { sending = false; send(motivo); } }, "Reintentar el envío");
 
-    showStatus("info", auto ? "Se ha acabado el tiempo. Enviando tus respuestas…" : "Enviando tus respuestas…");
+    showStatus(
+      "info",
+      motivo === "tiempo"
+        ? "Se ha acabado el tiempo. Enviando tus respuestas…"
+        : motivo === "salida"
+          ? "Has salido del examen: se envía automáticamente con tus respuestas actuales…"
+          : "Enviando tus respuestas…"
+    );
 
     let res = null;
     for (let attempt = 0; ; attempt++) {
@@ -355,21 +387,60 @@ function renderExam(session) {
       return;
     }
 
+    finished = true;
     store.remove(key);
     store.remove(lastKey());
-    showDone(res);
+    showDone(res, motivo);
+  }
+
+  /* --- vigilancia: salir de la pantalla del examen lo envía automáticamente --- */
+
+  function onLeave() {
+    if (!watched || sending || finished || progress.leftAt) return;
+    progress.salidas += 1;
+    progress.leftAt = Date.now();
+    save();
+    // La página puede congelarse al cambiar de app: se avisa al servidor con sendBeacon.
+    // Al volver (o al recargar) se reenvía con el mismo envioId para obtener la respuesta.
+    beaconSubmit(buildPayload("salida"));
+  }
+
+  function onReturn() {
+    if (!watched || sending || finished || !progress.leftAt) return;
+    progress.segundosFuera += (Date.now() - progress.leftAt) / 1000;
+    progress.leftAt = null;
+    save();
+    send("salida");
+  }
+
+  if (watched) {
+    document.addEventListener("visibilitychange", () => (document.hidden ? onLeave() : onReturn()));
+    window.addEventListener("pagehide", onLeave);
+    window.addEventListener("blur", onLeave);
+    window.addEventListener("focus", onReturn);
+    window.addEventListener("pageshow", onReturn);
   }
 
   const bar = h("div", { class: "exam-bar" }, counter, limitSeconds ? timer : null);
-  render(
+  const screen = h(
+    "div",
+    { class: watched ? "exam-screen no-copy" : "exam-screen" },
     h("h1", {}, exam.titulo),
     h("p", { class: "muted" }, `${who.nombre} · ${who.grupo}`),
+    watched ? h("p", { class: "muted small" }, "Examen vigilado: si sales de esta pantalla, el examen se envía automáticamente.") : null,
     bar,
     fieldset,
     reviewBtn,
     h("p", { class: "muted small" }, "Tus respuestas se guardan automáticamente en este dispositivo."),
     status
   );
+  if (watched) {
+    // Frena copiar, cortar, pegar, el menú contextual y seleccionar texto (disuasorio).
+    for (const type of ["copy", "cut", "paste", "contextmenu", "selectstart", "dragstart"]) {
+      screen.addEventListener(type, (e) => e.preventDefault());
+    }
+  }
+  render(screen);
   updateCounter();
   window.scrollTo(0, 0);
 
@@ -378,14 +449,24 @@ function renderExam(session) {
       const remaining = limitSeconds - (Date.now() - progress.startedAt) / 1000;
       timer.textContent = `⏱ ${formatClock(remaining)}`;
       timer.classList.toggle("low", remaining <= 60);
-      if (remaining <= 0) send(true);
+      if (remaining <= 0) send("tiempo");
     };
     tick();
     if (!sending) timerId = setInterval(tick, 1000);
   }
+
+  // Si el alumno salió y la página se recargó o se cerró, el examen se envía al volver.
+  if (watched && progress.salidas > 0 && !sending) {
+    if (progress.leftAt) {
+      progress.segundosFuera += (Date.now() - progress.leftAt) / 1000;
+      progress.leftAt = null;
+      save();
+    }
+    send("salida");
+  }
 }
 
-function showDone(res) {
+function showDone(res, motivo = "manual") {
   const hasScore = typeof res.nota === "number";
   render(
     h(
@@ -393,6 +474,9 @@ function showDone(res) {
       { class: "card" },
       h("h1", {}, "Examen enviado correctamente"),
       h("div", { class: "notice ok" }, h("p", {}, "Ya puedes cerrar esta página.")),
+      motivo === "salida"
+        ? h("div", { class: "notice warn" }, h("p", {}, "El examen se ha enviado automáticamente porque saliste de la pantalla del examen. Tu profesor lo verá registrado."))
+        : null,
       hasScore
         ? [
             h("p", { class: "muted" }, "Tu nota"),
@@ -420,6 +504,7 @@ async function main() {
           n_preguntas: res.exam.questions.length,
           tiempo_min: res.exam.tiempo_min,
           requiere_codigo: false,
+          control_salidas: res.exam.control_salidas,
         },
         res.exam
       );

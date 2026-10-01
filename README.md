@@ -96,16 +96,31 @@ Reglas:
 
 1. Abre `admin.html` e introduce tu token (se guarda solo en tu navegador).
 2. En **Crear examen**, sube el archivo (o pega el texto). Verás una vista previa con la respuesta correcta marcada; revisa que sea la que esperas. Si hay errores, la pantalla te dice en qué pregunta.
-3. Rellena los ajustes: título, grupo, tiempo límite, código de acceso (opcional), barajar preguntas y opciones, mostrar la nota al terminar y permitir nota negativa.
+3. Rellena los ajustes: título, grupo, tiempo límite, código de acceso (opcional), barajar preguntas y opciones, mostrar la nota al terminar, permitir nota negativa y vigilar salidas.
 4. **Publicar examen.** Obtendrás un **enlace** y un **código QR** para dárselos a los alumnos.
+
+### Examen vigilado (control de salidas)
+
+Al publicar, la casilla **«Vigilar salidas»** viene marcada por defecto. Con ella:
+
+- Si el alumno **cambia de pestaña, de ventana o de aplicación**, o bloquea el dispositivo, el examen **se envía automáticamente** tal como esté y se registra la salida.
+- La pantalla inicial avisa al alumno de que el examen está vigilado.
+- Durante el examen se desactivan **copiar, cortar, pegar, el menú contextual y seleccionar texto** (frena la copia casual; no es infalible).
+- En la hoja de resultados aparecen cuatro columnas más: `salidas`, `segundos_fuera`, `tipo_envio` (`manual`, `tiempo` o `salida`) y `envio_id`.
+
+La nota se calcula con normalidad: la app **no pone un 0 automático** al que sale. Lo que ves en `tipo_envio` = `salida` es una señal para que decidas tú, porque una notificación o un toque accidental también pueden provocarlo.
+
+**Límites que conviene conocer.** Una web puede detectar que el alumno se va, pero no impedirlo, ni ver otros dispositivos (por ejemplo, un móvil al lado). Para un bloqueo real en iPad, usa el **Acceso guiado** del propio iPad (*Ajustes → Accesibilidad → Acceso guiado*; se inicia con triple clic en el botón lateral) o el modo de app única que el centro puede activar desde su sistema de gestión de dispositivos. Se complementa con esta vigilancia.
+
+Si actualizas desde una versión anterior: los exámenes ya publicados **no** quedan vigilados (publica de nuevo los que quieras vigilar), y las hojas `R_<id>` antiguas reciben las columnas nuevas automáticamente.
 
 ### Ver resultados
 
 En **Mis exámenes** pulsa **Ver resultados** para abrir la hoja `R_<id>` de ese examen, con una fila por envío:
 
-`fecha | nombre | grupo | aciertos | errores | blancos | nota | duracion_min | posible_duplicado | respuestas_json`
+`fecha | nombre | grupo | aciertos | errores | blancos | nota | duracion_min | posible_duplicado | respuestas_json | salidas | segundos_fuera | tipo_envio | envio_id`
 
-`posible_duplicado` es `TRUE` si ya había un envío con el mismo nombre y grupo (sin tener en cuenta tildes, mayúsculas ni espacios). No se bloquea el envío; solo se marca para que lo revises.
+`envio_id` es un identificador interno que evita filas repetidas si un envío se reintenta. `posible_duplicado` es `TRUE` si ya había un envío con el mismo nombre y grupo (sin tener en cuenta tildes, mayúsculas ni espacios). No se bloquea el envío; solo se marca para que lo revises.
 
 ### Cerrar un examen
 

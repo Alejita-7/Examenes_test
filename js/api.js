@@ -62,3 +62,21 @@ export function apiPost(body) {
 
 export const fetchExam = (id, code = "") => apiGet({ action: "exam", id, code });
 export const submitExam = (payload) => apiPost({ action: "submit", ...payload });
+
+/**
+ * Envío "de despedida" para cuando la página se oculta (el alumno cambia de app).
+ * sendBeacon sobrevive al cambio de página y usa text/plain, como el resto de POST.
+ * No devuelve la respuesta: solo avisa al servidor. Devuelve true si el navegador lo aceptó.
+ */
+export function beaconSubmit(payload) {
+  try {
+    const body = JSON.stringify({ action: "submit", ...payload });
+    if (navigator.sendBeacon) {
+      return navigator.sendBeacon(baseUrl(), new Blob([body], { type: "text/plain;charset=UTF-8" }));
+    }
+    fetch(baseUrl(), { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body, keepalive: true }).catch(() => {});
+    return true;
+  } catch {
+    return false;
+  }
+}

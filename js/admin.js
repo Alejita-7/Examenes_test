@@ -177,7 +177,7 @@ function showPanel(initialExams) {
         return h(
           "div",
           { class: "exam-item" },
-          h("h3", {}, ex.titulo, " ", h("span", { class: `badge ${ex.activo ? "on" : "off"}` }, ex.activo ? "Abierto" : "Cerrado")),
+          h("h3", {}, ex.titulo, " ", h("span", { class: `badge ${ex.activo ? "on" : "off"}` }, ex.activo ? "Abierto" : "Cerrado"), ex.control_salidas ? " " : null, ex.control_salidas ? h("span", { class: "badge on" }, "Vigilado") : null),
           h(
             "p",
             { class: "muted small meta" },
@@ -223,6 +223,7 @@ function renderCreate(box, { onPublished, onUnauthorized }) {
   const barOpc = check("Barajar el orden de las opciones", true);
   const mostrar = check("Mostrar la nota al alumno al terminar", true);
   const negativa = check("Permitir nota negativa (si no, la mínima es 0)", false);
+  const vigilar = check("Vigilar salidas: si el alumno cambia de pestaña, ventana o app, el examen se envía solo y queda registrado", true);
 
   const msg = h("div");
   const publish = h("button", { class: "btn block", type: "submit", disabled: true }, "Publicar examen");
@@ -289,6 +290,7 @@ function renderCreate(box, { onPublished, onUnauthorized }) {
     barOpc.node,
     mostrar.node,
     negativa.node,
+    vigilar.node,
     msg,
     publish
   );
@@ -312,6 +314,7 @@ function renderCreate(box, { onPublished, onUnauthorized }) {
         barajar_opciones: barOpc.input.checked,
         mostrar_nota: mostrar.input.checked,
         permitir_negativa: negativa.input.checked,
+        control_salidas: vigilar.input.checked,
         preguntas: questions,
       });
       if (res.error === "unauthorized") return onUnauthorized();

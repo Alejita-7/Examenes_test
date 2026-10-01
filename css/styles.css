@@ -172,3 +172,7 @@ table.exams th, table.exams td { text-align: left; padding: 8px 6px; border-bott
 .qr img { display: block; width: 200px; height: 200px; image-rendering: pixelated; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
 @media (max-width: 520px) { .row2 { grid-template-columns: 1fr; } }
+
+/* Examen vigilado: no se puede seleccionar ni copiar el texto */
+.no-copy { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+@media print { .no-copy { display: none; } }

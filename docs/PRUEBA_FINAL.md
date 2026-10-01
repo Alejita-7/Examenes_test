@@ -64,6 +64,18 @@ Otros casos rápidos (cada uno es un envío más, con otro nombre):
 - [ ] **Abrir examen** lo reactiva.
 - [ ] Probar el tiempo límite: publica un examen de 1 minuto, empieza y espera: al llegar a 0 se envía solo con lo contestado.
 
+## 4b. Examen vigilado (control de salidas)
+
+Publica un examen con **Vigilar salidas** marcado y haz esta prueba desde un iPad o móvil:
+
+- [ ] La pantalla inicial muestra el aviso «Examen vigilado».
+- [ ] Durante el examen no se puede seleccionar ni copiar el texto de las preguntas.
+- [ ] Contesta alguna pregunta y **cambia de app** (o de pestaña, o bloquea la pantalla). Al volver, la página dice que el examen se envió automáticamente.
+- [ ] En `R_<id>` hay **una sola fila** con `salidas` = 1, `tipo_envio` = `salida` y `segundos_fuera` con un valor razonable.
+- [ ] Repite saliendo y **cerrando la pestaña sin volver**. Mira `R_<id>`: la fila debería aparecer igualmente (el aviso se manda al salir). Si no aparece, anótalo: algunos navegadores de iPad congelan la página antes de poder avisar; en ese caso, al abrir de nuevo el enlace con el mismo nombre y grupo, se envía al instante.
+- [ ] Con un examen **sin** vigilar, cambiar de app no envía nada.
+- [ ] Tras actualizar `Code.gs`, los exámenes antiguos siguen funcionando y no están vigilados.
+
 ## 5. Privacidad (importante)
 
 - [ ] Abre el repositorio en GitHub (o una ventana de incógnito): **no** hay ningún `.gift` ni `.txt` con exámenes, ni el token.

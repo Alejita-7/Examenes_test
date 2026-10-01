@@ -179,3 +179,8 @@ table.exams th, table.exams td { text-align: left; padding: 8px 6px; border-bott
 
 dialog.warning { border: 3px solid var(--danger); }
 dialog.warning h2 { color: var(--danger); }
+
+/* Cubierta que oculta el examen cuando el alumno no está a pantalla completa */
+.away-cover { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; background: var(--bg); }
+.away-cover[hidden] { display: none; }
+.away-cover h2 { color: var(--danger); font-size: 1.5rem; }

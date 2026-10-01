@@ -66,7 +66,7 @@ function showMessage(title, text, kind = "info") {
 
 // Norma de salidas para el alumno. No menciona cuántas salidas se toleran.
 const EXIT_RULE =
-  "No puedes salir de la pantalla del examen: no cambies de pestaña, de ventana ni de aplicación, ni uses otra web al mismo tiempo. Cada salida queda registrada con el tiempo que estés fuera y, si continúas saliendo, el examen se enviará automáticamente tal como esté.";
+  "No puedes salir de la pantalla del examen: no cambies de pestaña, de ventana ni de aplicación, ni uses otra web al mismo tiempo. El examen solo se muestra a pantalla completa: si la ventana se reduce o sales, se oculta hasta que vuelvas. Cada salida queda registrada con el tiempo que estés fuera y, si continúas saliendo, el examen se enviará automáticamente tal como esté.";
 
 function scoringText(questions) {
   const ks = new Set((questions ?? []).map((q) => q.options.length));
@@ -352,6 +352,7 @@ function renderExam(session) {
     if (sending) return;
     sending = true;
     clearInterval(timerId);
+    cover.hidden = true;
     lock();
     const payload = buildPayload(motivo);
 
@@ -425,8 +426,22 @@ function renderExam(session) {
     dialog.showModal();
   }
 
+  // Mientras el alumno está fuera de la pantalla completa, el examen no se puede ver ni contestar.
+  const cover = h(
+    "div",
+    { class: "away-cover", hidden: true, role: "alert" },
+    h("h2", {}, "⚠ Examen oculto"),
+    h("p", {}, h("strong", {}, "Vuelve a la pantalla completa del examen para continuar.")),
+    h("p", {}, "Mientras estés fuera, el examen no se muestra y el tiempo que pasas fuera queda registrado.")
+  );
+  function showCover(on) {
+    cover.hidden = !on;
+    if (!sending) fieldset.disabled = on;
+  }
+
   function onLeave() {
     if (!watched || sending || finished || progress.leftAt) return;
+    showCover(true);
     progress.salidas += 1;
     progress.leftAt = Date.now();
     save();
@@ -440,6 +455,7 @@ function renderExam(session) {
     progress.segundosFuera += (Date.now() - progress.leftAt) / 1000;
     progress.leftAt = null;
     save();
+    showCover(false);
     if (overLimit()) send("salida");
     else warnReturn();
   }
@@ -456,8 +472,8 @@ function renderExam(session) {
   let focusSeen = false; // hasFocus() solo cuenta si alguna vez ha sido true en este examen
   let watchTimer = null;
 
-  function evaluateAway() {
-    if (!watched || sending || finished) return;
+  // Actualiza las señales y dice si el alumno está ahora fuera de la pantalla completa del examen.
+  function computeAway() {
     signals.hidden = document.hidden;
     signals.reduced = isReducedWindow({
       innerWidth: window.innerWidth,
@@ -472,7 +488,12 @@ function renderExam(session) {
     } else if (focusSeen && !noFocusSince) {
       noFocusSince = Date.now();
     }
-    const away = isAway({ ...signals, noFocusMs: noFocusSince ? Date.now() - noFocusSince : 0 });
+    return isAway({ ...signals, noFocusMs: noFocusSince ? Date.now() - noFocusSince : 0 });
+  }
+
+  function evaluateAway() {
+    if (!watched || sending || finished) return;
+    const away = computeAway();
     if (away && !progress.leftAt) onLeave();
     else if (!away && progress.leftAt) onReturn();
   }
@@ -499,7 +520,8 @@ function renderExam(session) {
     fieldset,
     reviewBtn,
     h("p", { class: "muted small" }, "Tus respuestas se guardan automáticamente en este dispositivo."),
-    status
+    status,
+    watched ? cover : null
   );
   if (watched) {
     // Frena copiar, cortar, pegar, el menú contextual y seleccionar texto (disuasorio).
@@ -525,10 +547,14 @@ function renderExam(session) {
   // Si el alumno salió y la página se recargó o se cerró, se suma el tiempo que estuvo fuera.
   // Si ya superó las salidas permitidas, el examen se envía al volver.
   if (watched && progress.leftAt) {
-    progress.segundosFuera += (Date.now() - progress.leftAt) / 1000;
-    progress.leftAt = null;
-    save();
-    if (!overLimit()) warnReturn();
+    if (computeAway() && !overLimit()) {
+      showCover(true); // sigue fuera (por ejemplo, recargó la página en pantalla dividida): no cuenta otra salida
+    } else {
+      progress.segundosFuera += (Date.now() - progress.leftAt) / 1000;
+      progress.leftAt = null;
+      save();
+      if (!overLimit()) warnReturn();
+    }
   }
   if (watched && overLimit() && !sending) send("salida");
 }

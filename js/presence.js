@@ -21,9 +21,16 @@ export function isReducedWindow({ innerWidth, innerHeight, screenWidth, screenHe
  * - hidden: la página no es visible (otra pestaña, otra app, pantalla bloqueada).
  * - blurred: la ventana perdió el foco (evento blur).
  * - reduced: la ventana se redujo (pantalla dividida).
- * - noFocusMs: tiempo seguido que document.hasFocus() lleva en false (o 0 si no aplica).
- * Una pérdida de foco que dura menos de `graceMs` no cuenta por sí sola (evita parpadeos).
+ * - fullscreenLost: el alumno entró en pantalla completa y salió de ella.
+ * - noFocusMs: tiempo seguido que document.hasFocus() lleva en false (0 si no aplica).
+ * - pointerOutMs: tiempo seguido que el ratón lleva fuera de la página (solo ordenadores).
+ * Las pérdidas de foco y los paseos del ratón más cortos que su margen no cuentan (evita parpadeos).
  */
-export function isAway({ hidden, blurred, reduced, noFocusMs = 0 }, graceMs = 1000) {
-  return Boolean(hidden || blurred || reduced || noFocusMs >= graceMs);
+export const FOCUS_GRACE_MS = 1000;
+export const POINTER_GRACE_MS = 2000;
+
+export function isAway({ hidden, blurred, reduced, fullscreenLost, noFocusMs = 0, pointerOutMs = 0 }) {
+  return Boolean(
+    hidden || blurred || reduced || fullscreenLost || noFocusMs >= FOCUS_GRACE_MS || pointerOutMs >= POINTER_GRACE_MS
+  );
 }

@@ -116,7 +116,19 @@ La nota se calcula con normalidad: la app **no pone un 0 automático**. Las colu
 
 **Límites que conviene conocer.** Una web puede detectar que el alumno se va, pero no impedirlo, ni ver otros dispositivos (por ejemplo, un móvil al lado). El registro lo envía el navegador del alumno. Si el alumno sale y no vuelve a abrir el examen mientras le quedan salidas, no se genera ninguna fila hasta que lo envíe. Para un bloqueo real en iPad, usa el **Acceso guiado** del propio iPad (*Ajustes → Accesibilidad → Acceso guiado*; se inicia con triple clic en el botón lateral) o el modo de app única que el centro puede activar desde su sistema de gestión de dispositivos. Se complementa con esta vigilancia.
 
-**Cómo se detecta la salida.** Se combinan varias señales, porque ninguna basta por sí sola: página oculta (otra pestaña, otra app, pantalla bloqueada), ventana sin foco, y —solo en tabletas— ventana reducida (pantalla dividida, Slide Over o Stage Manager). Si en algún dispositivo una salida no se cuenta, abre `diagnostico.html` en él: muestra en directo qué señales emite el dispositivo.
+**Cómo se detecta la salida.** Se combinan varias señales, porque ninguna basta por sí sola:
+
+| Señal | Qué detecta |
+|---|---|
+| Página oculta | Otra pestaña, otra app (cuando cubre todo), pantalla bloqueada |
+| Ventana sin foco | Hacer clic en otra ventana o app |
+| Salir de la pantalla completa | Al empezar un examen vigilado se pide pantalla completa (en ordenadores y en las tabletas que lo permiten); si el alumno sale de ella, el examen se oculta y aparece el botón «Volver a pantalla completa» |
+| Ratón fuera de la página | Solo en ordenadores: si el cursor sale de la página más de 2 segundos (otra ventana, otro monitor) |
+| Ventana reducida | Solo en tabletas: pantalla dividida, Slide Over o Stage Manager que reducen la ventana |
+
+Mientras el alumno está «fuera» por cualquiera de ellas, el examen se oculta.
+
+**Lo que ninguna web puede detectar.** En un iPad, una app flotante (Slide Over) que se coloca encima **sin reducir ni quitar el foco a la ventana** no emite ninguna señal. Lo mismo ocurre con un móvil o un papel junto al ordenador. La medida eficaz para esos casos es el **Acceso guiado** del iPad (o el modo de app única del centro), que además impide abrir apps flotantes. Si en algún dispositivo una salida no se cuenta, abre `diagnostico.html` en él: muestra en directo qué señales emite.
 
 Si actualizas desde una versión anterior: los exámenes ya publicados con vigilancia pasan a tener 3 salidas permitidas, los que se publicaron sin vigilancia siguen sin vigilar, y las hojas `R_<id>` antiguas reciben las columnas nuevas automáticamente.
 

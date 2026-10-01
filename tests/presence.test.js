@@ -38,3 +38,9 @@ test("isAway: cualquier señal basta; la falta de foco necesita 1 s seguido", ()
   assert.equal(isAway({ noFocusMs: 400 }), false);
   assert.equal(isAway({ noFocusMs: 1000 }), true);
 });
+
+test("isAway: salir de la pantalla completa cuenta; el ratón fuera necesita 2 s seguidos", () => {
+  assert.equal(isAway({ fullscreenLost: true }), true);
+  assert.equal(isAway({ pointerOutMs: 1500 }), false);
+  assert.equal(isAway({ pointerOutMs: 2000 }), true);
+});

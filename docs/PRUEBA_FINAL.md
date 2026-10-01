@@ -81,6 +81,9 @@ Publica un examen con **Vigilar salidas** marcado y **2 salidas permitidas** (as
 - [ ] **Pantalla dividida:** mientras la ventana del examen esté reducida, las preguntas **desaparecen** y se ve «Examen oculto. Vuelve a la pantalla completa…». Al volver a pantalla completa aparece el aviso rojo y las respuestas siguen ahí.
 - [ ] Si recargas la página estando en pantalla dividida, el examen sigue oculto y **no** suma otra salida.
 - [ ] A pantalla completa **no** aparece nunca la cubierta (si apareciera, hay un falso positivo: abre `diagnostico.html` y mira la «Proporción»).
+- [ ] **Ordenador (PC o Mac):** al pulsar «Empezar» el examen pasa a pantalla completa. Pulsa **Esc** para salir de ella: el examen se oculta, aparece «Volver a pantalla completa» y, al pulsarlo, vuelve el examen con el aviso rojo.
+- [ ] **Ordenador:** pon otra ventana al lado o encima y haz clic en ella: el examen se oculta. Mueve el ratón fuera de la página (a otra ventana o monitor) más de 2 segundos: se oculta; un paseo corto no cuenta.
+- [ ] **iPad:** al pulsar «Empezar» mira si pasa a pantalla completa (si no lo permite, no se exige). Abre una app flotante (Slide Over) encima **sin** reducir la ventana: puede que no se detecte (ver README). Anota qué pasa; `diagnostico.html` muestra las señales.
 - [ ] Girar el iPad (vertical/horizontal) **no** cuenta como salida.
 - [ ] En un examen **sin** vigilar, cambiar de app no cuenta nada ni avisa.
 - [ ] Un examen publicado antes de esta versión sigue funcionando.

@@ -45,6 +45,11 @@ test("studentLink conserva la carpeta del sitio y sustituye la consulta", () => 
 });
 
 test("randomCode: longitud y alfabeto sin caracteres ambiguos", () => {
-  for (let i = 0; i < 200; i++) assert.match(randomCode(), /^[A-HJ-NP-Z2-9]{6}$/);
+  for (let i = 0; i < 200; i++) assert.match(randomCode(), /^[A-HJ-NP-Z][A-HJ-NP-Z2-9]{5}$/);
   assert.equal(randomCode(3, () => 0), "AAA");
+});
+
+test("studentLink fuerza https salvo en localhost", () => {
+  assert.equal(studentLink("http://prof.github.io/examenes/admin.html", "a1"), "https://prof.github.io/examenes/index.html?e=a1");
+  assert.equal(studentLink("http://localhost:8000/admin.html", "a1"), "http://localhost:8000/index.html?e=a1");
 });

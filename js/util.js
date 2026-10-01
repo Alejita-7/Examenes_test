@@ -68,16 +68,20 @@ export function studentLink(pageUrl, examId) {
   const url = new URL("index.html", pageUrl);
   url.search = "";
   url.hash = "";
+  // Los enlaces para los alumnos siempre por https (salvo en pruebas locales).
+  if (url.protocol === "http:" && !["localhost", "127.0.0.1"].includes(url.hostname)) url.protocol = "https:";
   url.searchParams.set("e", examId);
   return url.toString();
 }
 
-const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sin I, O, 0, 1
+const CODE_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // sin I, O
+const CODE_ALPHABET = CODE_LETTERS + "23456789"; // sin 0, 1
 
 /** Código de acceso legible de 6 caracteres. `random` devuelve un entero 0..max-1. */
 export function randomCode(length = 6, random = defaultRandom) {
-  let out = "";
-  for (let i = 0; i < length; i++) out += CODE_ALPHABET[random(CODE_ALPHABET.length)];
+  // Empieza por letra: así Sheets nunca lo toma por un número (p. ej. "2E4567").
+  let out = CODE_LETTERS[random(CODE_LETTERS.length)];
+  for (let i = 1; i < length; i++) out += CODE_ALPHABET[random(CODE_ALPHABET.length)];
   return out;
 }
 

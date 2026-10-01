@@ -101,10 +101,11 @@ Reglas:
 
 ### Examen vigilado (control de salidas)
 
-Al publicar, la casilla **«Vigilar salidas»** viene marcada, con **3 salidas permitidas** (puedes cambiar el número, de 0 a 20). Con ella:
+Al publicar, la casilla **«Vigilar salidas»** viene marcada, con **3 salidas permitidas** (puedes cambiar el número, de 0 a 20; solo lo ves tú). Con ella:
 
-- Cada vez que el alumno **cambia de pestaña, de ventana o de aplicación**, o bloquea el dispositivo, se **cuenta una salida** y se mide el **tiempo que está fuera**. Al volver ve un aviso con las salidas que lleva y las que le quedan.
-- Mientras no supere el límite, el alumno **puede seguir con el examen**: una notificación o un toque accidental no le cuesta la nota.
+- Cada vez que el alumno **cambia de pestaña, de ventana o de aplicación**, usa otra web en pantalla dividida o bloquea el dispositivo, se **cuenta una salida** y se mide el **tiempo que está fuera**.
+- **El alumno no ve cuántas salidas se permiten.** Solo se le dice que salir está prohibido, que queda registrado y que, si continúa, el examen se enviará automáticamente. Al volver tras una salida dentro del límite, ve un **aviso en rojo** de que está prohibido y de que el examen se enviará si continúa.
+- Mientras no supere el límite, el alumno puede seguir con el examen: una notificación o un toque accidental no le cuesta la nota.
 - Al **superar las salidas permitidas** (con 3, a la cuarta), el examen **se envía automáticamente** tal como esté.
 - Las salidas y el tiempo fuera **quedan siempre registrados**, tanto si el alumno envía el examen él mismo como si se envía solo o se acaba el tiempo.
 - La pantalla inicial explica la norma al alumno. Durante el examen se desactivan **copiar, cortar, pegar, el menú contextual y seleccionar texto** (frena la copia casual; no es infalible).

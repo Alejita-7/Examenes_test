@@ -167,4 +167,6 @@ Tests (requieren Node 20 o superior; no hay dependencias que instalar):
 node --test
 ```
 
+Guía de validación con Google real: [docs/PRUEBA_FINAL.md](docs/PRUEBA_FINAL.md).
+
 `tests/codegs.test.js` carga `Code.gs` con una hoja de cálculo simulada y comprueba que su corrección coincide con `js/grading.js`. **Si cambias la lógica de corrección en uno de los dos archivos, cámbiala también en el otro.**

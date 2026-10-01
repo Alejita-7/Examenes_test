@@ -58,6 +58,22 @@ function loadJson(key) {
   }
 }
 
+/* ------------------------- pantalla completa ---------------------------- */
+
+const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+const fsSupported = Boolean(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+
+// Debe llamarse dentro de un gesto del usuario (pulsar un botón). Si no se puede, se sigue sin ella.
+async function enterFullscreen() {
+  if (!fsSupported || fsElement()) return;
+  const el = document.documentElement;
+  try {
+    await (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+  } catch {
+    /* el navegador no la permite: el examen continúa sin exigirla */
+  }
+}
+
 /* ------------------------------ pantallas ------------------------------- */
 
 function showMessage(title, text, kind = "info") {
@@ -66,7 +82,7 @@ function showMessage(title, text, kind = "info") {
 
 // Norma de salidas para el alumno. No menciona cuántas salidas se toleran.
 const EXIT_RULE =
-  "No puedes salir de la pantalla del examen: no cambies de pestaña, de ventana ni de aplicación, ni uses otra web al mismo tiempo. El examen solo se muestra a pantalla completa: si la ventana se reduce o sales, se oculta hasta que vuelvas. Cada salida queda registrada con el tiempo que estés fuera y, si continúas saliendo, el examen se enviará automáticamente tal como esté.";
+  "No puedes salir de la pantalla del examen: no cambies de pestaña, de ventana ni de aplicación, ni uses otra web al mismo tiempo. El examen se abre a pantalla completa y solo se muestra así: si sales de la pantalla completa, reduces la ventana, cambias de aplicación o sacas el ratón de la página, el examen se oculta hasta que vuelvas. Cada salida queda registrada con el tiempo que estés fuera y, si continúas saliendo, el examen se enviará automáticamente tal como esté.";
 
 function scoringText(questions) {
   const ks = new Set((questions ?? []).map((q) => q.options.length));
@@ -132,6 +148,7 @@ function showStart(info, exam) {
     if (needsCode && !c) return fail("Escribe el código de acceso.");
 
     button.disabled = true;
+    if (info.control_salidas) enterFullscreen(); // dentro del gesto de pulsar «Empezar»
     try {
       let loaded = exam;
       if (!loaded || needsCode) {
@@ -432,10 +449,13 @@ function renderExam(session) {
     { class: "away-cover", hidden: true, role: "alert" },
     h("h2", {}, "⚠ Examen oculto"),
     h("p", {}, h("strong", {}, "Vuelve a la pantalla completa del examen para continuar.")),
-    h("p", {}, "Mientras estés fuera, el examen no se muestra y el tiempo que pasas fuera queda registrado.")
+    h("p", {}, "Mientras estés fuera, el examen no se muestra y el tiempo que pasas fuera queda registrado."),
+    h("button", { type: "button", class: "btn", id: "fs-btn", hidden: true, onclick: () => enterFullscreen() }, "Volver a pantalla completa")
   );
   function showCover(on) {
     cover.hidden = !on;
+    // El botón solo aparece si salió de la pantalla completa (necesita un gesto para volver a entrar).
+    cover.querySelector("#fs-btn").hidden = !(on && signals.fullscreenLost);
     if (!sending) fieldset.disabled = on;
   }
 
@@ -467,8 +487,11 @@ function renderExam(session) {
    * - document.hasFocus() en false durante 1 s (el iPad no siempre emite blur en pantalla dividida),
    * - ventana reducida (pantalla dividida, Slide Over, Stage Manager en tabletas).
    */
-  const signals = { hidden: false, blurred: false, reduced: false };
+  const signals = { hidden: false, blurred: false, reduced: false, fullscreenLost: false };
   let noFocusSince = 0;
+  let pointerOutSince = 0;
+  let fullscreenSeen = false; // solo se exige si el alumno llegó a estar en pantalla completa
+  const finePointer = window.matchMedia?.("(pointer: fine)").matches ?? false;
   let focusSeen = false; // hasFocus() solo cuenta si alguna vez ha sido true en este examen
   let watchTimer = null;
 
@@ -488,7 +511,13 @@ function renderExam(session) {
     } else if (focusSeen && !noFocusSince) {
       noFocusSince = Date.now();
     }
-    return isAway({ ...signals, noFocusMs: noFocusSince ? Date.now() - noFocusSince : 0 });
+    if (fsElement()) fullscreenSeen = true;
+    signals.fullscreenLost = fullscreenSeen && !fsElement();
+    return isAway({
+      ...signals,
+      noFocusMs: noFocusSince ? Date.now() - noFocusSince : 0,
+      pointerOutMs: pointerOutSince ? Date.now() - pointerOutSince : 0,
+    });
   }
 
   function evaluateAway() {
@@ -496,6 +525,7 @@ function renderExam(session) {
     const away = computeAway();
     if (away && !progress.leftAt) onLeave();
     else if (!away && progress.leftAt) onReturn();
+    if (!cover.hidden) cover.querySelector("#fs-btn").hidden = !signals.fullscreenLost;
   }
 
   if (watched) {
@@ -506,6 +536,13 @@ function renderExam(session) {
     window.addEventListener("pageshow", evaluateAway);
     window.addEventListener("resize", evaluateAway);
     window.addEventListener("orientationchange", evaluateAway);
+    document.addEventListener("fullscreenchange", evaluateAway);
+    document.addEventListener("webkitfullscreenchange", evaluateAway);
+    if (finePointer) {
+      // Ordenador: el ratón que sale de la página (otra ventana, otro monitor) y no vuelve en 2 s.
+      document.documentElement.addEventListener("mouseleave", () => { pointerOutSince = pointerOutSince || Date.now(); });
+      document.documentElement.addEventListener("mouseenter", () => { pointerOutSince = 0; evaluateAway(); });
+    }
     watchTimer = setInterval(evaluateAway, 500);
   }
 

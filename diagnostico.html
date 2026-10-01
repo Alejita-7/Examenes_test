@@ -14,6 +14,7 @@
 
     <div class="card">
       <h2>Estado ahora</h2>
+      <div class="actions" style="margin-bottom:10px"><button class="btn secondary small" id="fs" type="button">Probar pantalla completa</button></div>
       <table class="exams" id="state"></table>
     </div>
 
@@ -36,14 +37,17 @@
       pantalla: `${screen.width}x${screen.height}`,
       proporcion: ((innerWidth * innerHeight) / (screen.width * screen.height)).toFixed(2),
       tactil: matchMedia("(pointer: coarse)").matches,
+      raton: matchMedia("(pointer: fine)").matches,
+      fullscreen: Boolean(document.fullscreenElement || document.webkitFullscreenElement),
+      fsSoportada: Boolean(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen),
     });
     const reduced = () => isReducedWindow({ innerWidth, innerHeight, screenWidth: screen.width, screenHeight: screen.height, coarse: matchMedia("(pointer: coarse)").matches });
     function write(kind) {
       const s = snap();
-      const line = `${((Date.now() - t0) / 1000).toFixed(1).padStart(6)} s  ${kind.padEnd(16)} foco=${s.hasFocus} oculta=${s.hidden} ventana=${s.ventana} prop=${s.proporcion}`;
+      const line = `${((Date.now() - t0) / 1000).toFixed(1).padStart(6)} s  ${kind.padEnd(18)} foco=${s.hasFocus} oculta=${s.hidden} completa=${s.fullscreen} ventana=${s.ventana} prop=${s.proporcion}`;
       log.textContent = line + "\n" + log.textContent;
     }
-    for (const [target, names] of [[window, ["blur", "focus", "pagehide", "pageshow", "resize", "orientationchange"]], [document, ["visibilitychange"]]]) {
+    for (const [target, names] of [[window, ["blur", "focus", "pagehide", "pageshow", "resize", "orientationchange"]], [document, ["visibilitychange", "fullscreenchange", "webkitfullscreenchange"]], [document.documentElement, ["mouseleave", "mouseenter"]]]) {
       for (const n of names) target.addEventListener(n, () => write(n));
     }
     function paint() {
@@ -55,11 +59,20 @@
         ["Tamaño de la pantalla", s.pantalla],
         [`Proporción ventana/pantalla (se considera pantalla dividida por debajo de ${REDUCED_RATIO})`, s.proporcion],
         ["Pantalla táctil", s.tactil],
+        ["Ratón (puntero fino)", s.raton],
+        ["Admite pantalla completa", s.fsSoportada],
+        ["En pantalla completa ahora", s.fullscreen],
         ["¿Cuenta como pantalla dividida?", reduced()],
         ["¿Contaría como salida?", isAway({ hidden: s.hidden, reduced: reduced(), noFocusMs: s.hasFocus ? 0 : 1000 })],
       ];
       state.replaceChildren(...rows.map(([k, v]) => { const tr = document.createElement("tr"); const a = document.createElement("td"); a.textContent = k; const b = document.createElement("td"); b.textContent = String(v); b.style.fontWeight = "700"; tr.append(a, b); return tr; }));
     }
+    document.getElementById("fs").addEventListener("click", () => {
+      const el = document.documentElement;
+      const req = el.requestFullscreen || el.webkitRequestFullscreen;
+      if (!req) return write("pantalla completa NO soportada");
+      Promise.resolve(req.call(el)).then(() => write("pantalla completa OK"), (e) => write("pantalla completa error: " + e.message));
+    });
     document.getElementById("clear").addEventListener("click", () => (log.textContent = ""));
     paint(); setInterval(paint, 500); write("inicio");
   </script>

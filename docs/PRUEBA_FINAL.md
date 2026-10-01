@@ -66,15 +66,19 @@ Otros casos rápidos (cada uno es un envío más, con otro nombre):
 
 ## 4b. Examen vigilado (control de salidas)
 
-Publica un examen con **Vigilar salidas** marcado y haz esta prueba desde un iPad o móvil:
+Publica un examen con **Vigilar salidas** marcado y **2 salidas permitidas** (así se prueba rápido). Hazlo desde un iPad o móvil, con un nombre distinto en cada prueba:
 
-- [ ] La pantalla inicial muestra el aviso «Examen vigilado».
-- [ ] Durante el examen no se puede seleccionar ni copiar el texto de las preguntas.
-- [ ] Contesta alguna pregunta y **cambia de app** (o de pestaña, o bloquea la pantalla). Al volver, la página dice que el examen se envió automáticamente.
-- [ ] En `R_<id>` hay **una sola fila** con `salidas` = 1, `tipo_envio` = `salida` y `segundos_fuera` con un valor razonable.
-- [ ] Repite saliendo y **cerrando la pestaña sin volver**. Mira `R_<id>`: la fila debería aparecer igualmente (el aviso se manda al salir). Si no aparece, anótalo: algunos navegadores de iPad congelan la página antes de poder avisar; en ese caso, al abrir de nuevo el enlace con el mismo nombre y grupo, se envía al instante.
-- [ ] Con un examen **sin** vigilar, cambiar de app no envía nada.
-- [ ] Tras actualizar `Code.gs`, los exámenes antiguos siguen funcionando y no están vigilados.
+- [ ] La pantalla inicial explica la norma («Puedes salir como máximo 2 veces…»).
+- [ ] Arriba aparece el contador «Salidas: 0 de 2». No se puede seleccionar ni copiar el texto de las preguntas.
+- [ ] **Salida 1:** sal a la pantalla de inicio, espera unos 5 segundos y vuelve. Aparece un aviso («salida número 1 de 2») y **sigues pudiendo hacer el examen** con tus respuestas intactas. El contador marca «1 de 2». En la hoja todavía **no hay fila**.
+- [ ] **Salida 2:** igual. El contador marca «2 de 2» y sigues dentro.
+- [ ] **Salida 3:** al salir por tercera vez y volver, el examen aparece enviado, con el aviso «superaste las salidas permitidas».
+- [ ] En `R_<id>` hay **una sola fila** con `salidas` = 3, `tipo_envio` = `salida` y `segundos_fuera` con la suma del tiempo de las salidas.
+- [ ] Prueba con otro nombre: sal **una vez** y envía tú el examen con el botón. La fila debe tener `salidas` = 1, `tipo_envio` = `manual` y `segundos_fuera` > 0.
+- [ ] Prueba con otro nombre: sal una vez y **recarga la página** sin enviar. Al volver a entrar con el mismo nombre y grupo, sigues dentro del examen con el contador en «1 de 2».
+- [ ] Prueba cambiar de pestaña y bloquear la pantalla: ambas cuentan como salida.
+- [ ] En un examen **sin** vigilar, cambiar de app no cuenta nada ni avisa.
+- [ ] Un examen publicado antes de esta versión sigue funcionando.
 
 ## 5. Privacidad (importante)
 

@@ -63,6 +63,14 @@ function showMessage(title, text, kind = "info") {
   render(h("div", { class: "card" }, h("h1", {}, title), h("div", { class: `notice ${kind}` }, h("p", {}, text))));
 }
 
+// Texto de la norma de salidas, para el aviso inicial.
+function exitRule(allowed) {
+  const n = Number.isFinite(Number(allowed)) ? Number(allowed) : 3;
+  const what = "Salir de la pantalla del examen (cambiar de pestaña, de ventana o de aplicación, o bloquear el dispositivo) queda registrado: tu profesor verá cuántas veces sales y cuánto tiempo estás fuera.";
+  if (n === 0) return `${what} Si sales, el examen se enviará automáticamente tal como esté.`;
+  return `${what} Puedes salir como máximo ${n} ${n === 1 ? "vez" : "veces"}; a la siguiente salida el examen se enviará automáticamente tal como esté.`;
+}
+
 function scoringText(questions) {
   const ks = new Set((questions ?? []).map((q) => q.options.length));
   const penalty =
@@ -165,7 +173,7 @@ function showStart(info, exam) {
             "div",
             { class: "notice warn" },
             h("p", {}, h("strong", {}, "Examen vigilado")),
-            h("p", {}, "Si sales de la pantalla del examen (cambias de pestaña, de ventana o de aplicación, o bloqueas el dispositivo), el examen se enviará automáticamente tal como esté y tu profesor verá que saliste."),
+            h("p", {}, exitRule(info.salidas_permitidas)),
             h("p", {}, "Copiar y pegar está desactivado durante el examen.")
           )
         : null,
@@ -218,6 +226,8 @@ function renderExam(session) {
   const total = questions.length;
   const limitSeconds = (Number(exam.tiempo_min) || 0) * 60;
   const watched = Boolean(exam.control_salidas);
+  const allowed = Number.isFinite(Number(exam.salidas_permitidas)) ? Number(exam.salidas_permitidas) : 3;
+  const overLimit = () => progress.salidas > allowed;
   let timerId = null;
   let sending = false;
   let finished = false;
@@ -357,7 +367,7 @@ function renderExam(session) {
       motivo === "tiempo"
         ? "Se ha acabado el tiempo. Enviando tus respuestas…"
         : motivo === "salida"
-          ? "Has salido del examen: se envía automáticamente con tus respuestas actuales…"
+          ? "Has superado las salidas permitidas: el examen se envía automáticamente con tus respuestas actuales…"
           : "Enviando tus respuestas…"
     );
 
@@ -393,16 +403,41 @@ function renderExam(session) {
     showDone(res, motivo);
   }
 
-  /* --- vigilancia: salir de la pantalla del examen lo envía automáticamente --- */
+  /* --- vigilancia: cada salida se cuenta y se mide; al superar el límite se envía solo --- */
+
+  const exitsBadge = h("span", { class: "exits-badge", hidden: !watched });
+  const updateExits = () => {
+    exitsBadge.textContent = `Salidas: ${progress.salidas} de ${allowed}`;
+    exitsBadge.classList.toggle("low", progress.salidas >= allowed);
+  };
+
+  function warnReturn() {
+    const left = allowed - progress.salidas;
+    const dialog = h("dialog");
+    const close = () => {
+      dialog.close();
+      dialog.remove();
+    };
+    dialog.append(
+      h("h2", {}, "Has salido del examen"),
+      h("p", {}, `Es tu salida número ${progress.salidas} de ${allowed} permitidas. Ha quedado registrada, junto con el tiempo que has estado fuera.`),
+      h("p", {}, left > 0 ? `Te ${left === 1 ? "queda 1 salida" : `quedan ${left} salidas`}. Cuando se acaben, si vuelves a salir, el examen se enviará automáticamente tal como esté.` : "Ya no te quedan salidas: si vuelves a salir, el examen se enviará automáticamente tal como esté."),
+      h("div", { class: "actions" }, h("button", { type: "button", class: "btn", onclick: close }, "Continuar con el examen"))
+    );
+    document.body.append(dialog);
+    dialog.addEventListener("cancel", () => dialog.remove());
+    dialog.showModal();
+  }
 
   function onLeave() {
     if (!watched || sending || finished || progress.leftAt) return;
     progress.salidas += 1;
     progress.leftAt = Date.now();
     save();
-    // La página puede congelarse al cambiar de app: se avisa al servidor con sendBeacon.
-    // Al volver (o al recargar) se reenvía con el mismo envioId para obtener la respuesta.
-    beaconSubmit(buildPayload("salida"));
+    updateExits();
+    // Solo al superar el límite se avisa al servidor. La página puede congelarse al cambiar
+    // de app, así que se usa sendBeacon; al volver se reenvía con el mismo envioId.
+    if (overLimit()) beaconSubmit(buildPayload("salida"));
   }
 
   function onReturn() {
@@ -410,7 +445,9 @@ function renderExam(session) {
     progress.segundosFuera += (Date.now() - progress.leftAt) / 1000;
     progress.leftAt = null;
     save();
-    send("salida");
+    updateExits();
+    if (overLimit()) send("salida");
+    else warnReturn();
   }
 
   if (watched) {
@@ -421,13 +458,13 @@ function renderExam(session) {
     window.addEventListener("pageshow", onReturn);
   }
 
-  const bar = h("div", { class: "exam-bar" }, counter, limitSeconds ? timer : null);
+  const bar = h("div", { class: "exam-bar" }, counter, exitsBadge, limitSeconds ? timer : null);
   const screen = h(
     "div",
     { class: watched ? "exam-screen no-copy" : "exam-screen" },
     h("h1", {}, exam.titulo),
     h("p", { class: "muted" }, `${who.nombre} · ${who.grupo}`),
-    watched ? h("p", { class: "muted small" }, "Examen vigilado: si sales de esta pantalla, el examen se envía automáticamente.") : null,
+    watched ? h("p", { class: "muted small" }, "Examen vigilado: " + exitRule(allowed)) : null,
     bar,
     fieldset,
     reviewBtn,
@@ -442,6 +479,7 @@ function renderExam(session) {
   }
   render(screen);
   updateCounter();
+  updateExits();
   window.scrollTo(0, 0);
 
   if (limitSeconds) {
@@ -455,15 +493,16 @@ function renderExam(session) {
     if (!sending) timerId = setInterval(tick, 1000);
   }
 
-  // Si el alumno salió y la página se recargó o se cerró, el examen se envía al volver.
-  if (watched && progress.salidas > 0 && !sending) {
-    if (progress.leftAt) {
-      progress.segundosFuera += (Date.now() - progress.leftAt) / 1000;
-      progress.leftAt = null;
-      save();
-    }
-    send("salida");
+  // Si el alumno salió y la página se recargó o se cerró, se suma el tiempo que estuvo fuera.
+  // Si ya superó las salidas permitidas, el examen se envía al volver.
+  if (watched && progress.leftAt) {
+    progress.segundosFuera += (Date.now() - progress.leftAt) / 1000;
+    progress.leftAt = null;
+    save();
+    updateExits();
+    if (!overLimit()) warnReturn();
   }
+  if (watched && overLimit() && !sending) send("salida");
 }
 
 function showDone(res, motivo = "manual") {
@@ -475,7 +514,7 @@ function showDone(res, motivo = "manual") {
       h("h1", {}, "Examen enviado correctamente"),
       h("div", { class: "notice ok" }, h("p", {}, "Ya puedes cerrar esta página.")),
       motivo === "salida"
-        ? h("div", { class: "notice warn" }, h("p", {}, "El examen se ha enviado automáticamente porque saliste de la pantalla del examen. Tu profesor lo verá registrado."))
+        ? h("div", { class: "notice warn" }, h("p", {}, "El examen se ha enviado automáticamente porque superaste las salidas permitidas. Tu profesor lo verá registrado."))
         : null,
       hasScore
         ? [
@@ -505,6 +544,7 @@ async function main() {
           tiempo_min: res.exam.tiempo_min,
           requiere_codigo: false,
           control_salidas: res.exam.control_salidas,
+          salidas_permitidas: res.exam.salidas_permitidas,
         },
         res.exam
       );

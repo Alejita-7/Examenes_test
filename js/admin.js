@@ -177,7 +177,7 @@ function showPanel(initialExams) {
         return h(
           "div",
           { class: "exam-item" },
-          h("h3", {}, ex.titulo, " ", h("span", { class: `badge ${ex.activo ? "on" : "off"}` }, ex.activo ? "Abierto" : "Cerrado"), ex.control_salidas ? " " : null, ex.control_salidas ? h("span", { class: "badge on" }, "Vigilado") : null),
+          h("h3", {}, ex.titulo, " ", h("span", { class: `badge ${ex.activo ? "on" : "off"}` }, ex.activo ? "Abierto" : "Cerrado"), ex.control_salidas ? " " : null, ex.control_salidas ? h("span", { class: "badge on" }, `Vigilado · ${ex.salidas_permitidas ?? 3} salidas`) : null),
           h(
             "p",
             { class: "muted small meta" },
@@ -223,7 +223,16 @@ function renderCreate(box, { onPublished, onUnauthorized }) {
   const barOpc = check("Barajar el orden de las opciones", true);
   const mostrar = check("Mostrar la nota al alumno al terminar", true);
   const negativa = check("Permitir nota negativa (si no, la mínima es 0)", false);
-  const vigilar = check("Vigilar salidas: si el alumno cambia de pestaña, ventana o app, el examen se envía solo y queda registrado", true);
+  const vigilar = check("Vigilar salidas: registrar cuántas veces y cuánto tiempo sale el alumno (pestaña, ventana o app)", true);
+  const salidasInput = h("input", { name: "salidas", type: "number", min: 0, max: 20, step: 1, value: 3, inputmode: "numeric" });
+  const salidasField = h(
+    "label",
+    { class: "field" },
+    h("span", {}, "Salidas permitidas"),
+    salidasInput,
+    h("small", { class: "hint" }, "Al superarlas, el examen se envía solo. Con 3, a la cuarta salida se envía. Con 0, se envía en la primera.")
+  );
+  vigilar.input.addEventListener("change", () => (salidasInput.disabled = !vigilar.input.checked));
 
   const msg = h("div");
   const publish = h("button", { class: "btn block", type: "submit", disabled: true }, "Publicar examen");
@@ -291,6 +300,7 @@ function renderCreate(box, { onPublished, onUnauthorized }) {
     mostrar.node,
     negativa.node,
     vigilar.node,
+    salidasField,
     msg,
     publish
   );
@@ -315,6 +325,7 @@ function renderCreate(box, { onPublished, onUnauthorized }) {
         mostrar_nota: mostrar.input.checked,
         permitir_negativa: negativa.input.checked,
         control_salidas: vigilar.input.checked,
+        salidas_permitidas: salidasInput.value === "" ? 3 : Math.max(0, Math.min(20, Math.floor(Number(salidasInput.value)) || 0)),
         preguntas: questions,
       });
       if (res.error === "unauthorized") return onUnauthorized();

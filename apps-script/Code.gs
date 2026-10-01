@@ -13,7 +13,7 @@ const SHEET_EXAMS = 'Examenes';
 const EXAM_HEADERS = [
   'id', 'titulo', 'grupo_destino', 'activo', 'codigo_acceso', 'tiempo_min',
   'barajar_preguntas', 'barajar_opciones', 'mostrar_nota', 'permitir_negativa',
-  'preguntas_json', 'creado', 'control_salidas'
+  'preguntas_json', 'creado', 'control_salidas', 'salidas_permitidas'
 ];
 const RESULT_HEADERS = [
   'fecha', 'nombre', 'grupo', 'aciertos', 'errores', 'blancos', 'nota',
@@ -26,6 +26,8 @@ const WARN_CHARS = 45000;     // aviso: cerca del límite de celda
 const MAX_CHARS = 49000;      // límite duro (la celda admite 50 000)
 const MAX_QUESTIONS = 200;
 const MAX_OPTIONS = 26;
+const DEFAULT_ALLOWED_EXITS = 3;   // salidas permitidas antes del envío automático
+const MAX_ALLOWED_EXITS = 20;
 
 /* ------------------------------------------------------------------ */
 /* Puntos de entrada                                                   */
@@ -97,7 +99,8 @@ function getExam_(params) {
     n_preguntas: questions.length,
     tiempo_min: exam.tiempo_min,
     requiere_codigo: exam.codigo_acceso !== '',
-    control_salidas: exam.control_salidas
+    control_salidas: exam.control_salidas,
+    salidas_permitidas: exam.salidas_permitidas
   };
 
   var codeCheck = checkCode_(exam, params.code);
@@ -120,6 +123,7 @@ function getExam_(params) {
       barajar_opciones: exam.barajar_opciones,
       mostrar_nota: exam.mostrar_nota,
       control_salidas: exam.control_salidas,
+      salidas_permitidas: exam.salidas_permitidas,
       questions: questions.map(function (q) {
         return {
           id: q.id,
@@ -272,7 +276,8 @@ function createExam_(p) {
       toBool_(p.permitir_negativa),
       json,
       new Date(),
-      toBool_(p.control_salidas)
+      toBool_(p.control_salidas),
+      allowedExits_(p.salidas_permitidas)
     ], [1, 3, 5]);
     getResultsSheet_(id);
   } finally {
@@ -313,6 +318,7 @@ function listExams_(params) {
       grupo_destino: ex.grupo_destino,
       activo: ex.activo,
       control_salidas: ex.control_salidas,
+      salidas_permitidas: ex.salidas_permitidas,
       codigo_acceso: ex.codigo_acceso,
       tiempo_min: ex.tiempo_min,
       n_preguntas: JSON.parse(ex.preguntas_json).length,
@@ -402,6 +408,14 @@ function clampNumber_(v, max, decimals) {
   if (!isFinite(n) || n < 0) return 0;
   var f = Math.pow(10, decimals || 0);
   return Math.round(Math.min(n, max) * f) / f;
+}
+
+// Salidas permitidas antes del envío automático: entero 0..20; 3 si no se indica.
+function allowedExits_(v) {
+  if (v === undefined || v === null || v === '') return DEFAULT_ALLOWED_EXITS;
+  var n = Math.floor(Number(v));
+  if (!isFinite(n)) return DEFAULT_ALLOWED_EXITS;
+  return Math.max(0, Math.min(MAX_ALLOWED_EXITS, n));
 }
 
 function toBool_(v) {
@@ -532,7 +546,8 @@ function readExams_() {
       permitir_negativa: toBool_(r[9]),
       preguntas_json: String(r[10]),
       creado: r[11],
-      control_salidas: toBool_(r[12])
+      control_salidas: toBool_(r[12]),
+      salidas_permitidas: allowedExits_(r[13])
     });
   }
   return out;

@@ -237,3 +237,26 @@ test("hojas de resultados antiguas reciben las columnas nuevas", () => {
   env.post({ action: "submit", examId: id, nombre: "A", grupo: "B", respuestas: {}, envioId: "x1" });
   assert.deepEqual(plain(sheet.rows[0].slice(10)), ["salidas", "segundos_fuera", "tipo_envio", "envio_id"]);
 });
+
+test("salidas_permitidas: se guarda, se limita a 0..20 y vale 3 por defecto", () => {
+  const env = makeEnv();
+  const pick = (v) => {
+    const id = publish(env, { control_salidas: true, ...(v === undefined ? {} : { salidas_permitidas: v }) });
+    return env.get({ action: "exam", id }).exam.salidas_permitidas;
+  };
+  assert.equal(pick(undefined), 3);
+  assert.equal(pick(5), 5);
+  assert.equal(pick(0), 0);
+  assert.equal(pick(99), 20);
+  assert.equal(pick(-4), 0);
+  assert.equal(pick("abc"), 3);
+});
+
+test("salidas_permitidas llega en info y en la lista; un examen antiguo tiene 3", () => {
+  const env = makeEnv();
+  const id = publish(env, { control_salidas: true, salidas_permitidas: 2, codigo_acceso: "Luz42" });
+  assert.equal(env.get({ action: "exam", id }).info.salidas_permitidas, 2);
+  assert.equal(env.get({ action: "list", token: "secreto" }).exams[0].salidas_permitidas, 2);
+  env.sheets.get("Examenes").rows[1].length = 12; // fila anterior a las columnas nuevas
+  assert.equal(env.get({ action: "exam", id, code: "Luz42" }).exam.salidas_permitidas, 3);
+});

@@ -33,3 +33,18 @@ test("formatNumber usa coma decimal", () => {
   assert.equal(formatNumber(7.5), "7,5");
   assert.equal(formatNumber(10), "10");
 });
+
+import { studentLink, randomCode } from "../js/util.js";
+
+test("studentLink conserva la carpeta del sitio y sustituye la consulta", () => {
+  assert.equal(
+    studentLink("https://prof.github.io/examenes/admin.html?x=1#y", "ab12"),
+    "https://prof.github.io/examenes/index.html?e=ab12"
+  );
+  assert.equal(studentLink("https://prof.github.io/examenes/", "z"), "https://prof.github.io/examenes/index.html?e=z");
+});
+
+test("randomCode: longitud y alfabeto sin caracteres ambiguos", () => {
+  for (let i = 0; i < 200; i++) assert.match(randomCode(), /^[A-HJ-NP-Z2-9]{6}$/);
+  assert.equal(randomCode(3, () => 0), "AAA");
+});

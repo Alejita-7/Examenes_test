@@ -62,3 +62,27 @@ export function penaltyFraction(k) {
 export function formatNumber(n) {
   return Number(n).toLocaleString("es-ES", { maximumFractionDigits: 2 });
 }
+
+/** Enlace del alumno para un examen, a partir de la URL de cualquier página del sitio. */
+export function studentLink(pageUrl, examId) {
+  const url = new URL("index.html", pageUrl);
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("e", examId);
+  return url.toString();
+}
+
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sin I, O, 0, 1
+
+/** Código de acceso legible de 6 caracteres. `random` devuelve un entero 0..max-1. */
+export function randomCode(length = 6, random = defaultRandom) {
+  let out = "";
+  for (let i = 0; i < length; i++) out += CODE_ALPHABET[random(CODE_ALPHABET.length)];
+  return out;
+}
+
+function defaultRandom(max) {
+  const buf = new Uint32Array(1);
+  globalThis.crypto.getRandomValues(buf);
+  return buf[0] % max;
+}

@@ -326,6 +326,9 @@ function renderExam(session) {
     dialog.showModal();
   }
 
+  // Tiempo total fuera: salidas ya cerradas + la que esté en curso.
+  const awaySeconds = () => progress.segundosFuera + (progress.leftAt ? (Date.now() - progress.leftAt) / 1000 : 0);
+
   function buildPayload(motivo) {
     const respuestas = {};
     for (const q of exam.questions) respuestas[q.id] = progress.answers[q.id] ?? null;
@@ -337,7 +340,8 @@ function renderExam(session) {
       respuestas,
       duracion_min: Math.round(((Date.now() - progress.startedAt) / 60000) * 100) / 100,
       salidas: progress.salidas,
-      segundos_fuera: Math.round(progress.segundosFuera * 10) / 10,
+      // Incluye el tiempo de una salida que todavía no ha terminado (el alumno envía sin haber vuelto).
+      segundos_fuera: Math.round(awaySeconds() * 10) / 10,
       envio: motivo,
       envioId: progress.envioId,
     };

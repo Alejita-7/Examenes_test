@@ -68,6 +68,8 @@ export function studentLink(pageUrl, examId) {
   const url = new URL("index.html", pageUrl);
   url.search = "";
   url.hash = "";
+  // Los enlaces para los alumnos siempre por https (salvo en pruebas locales).
+  if (url.protocol === "http:" && !["localhost", "127.0.0.1"].includes(url.hostname)) url.protocol = "https:";
   url.searchParams.set("e", examId);
   return url.toString();
 }

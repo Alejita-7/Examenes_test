@@ -101,10 +101,11 @@ Reglas:
 
 ### Examen vigilado (control de salidas)
 
-Al publicar, la casilla **«Vigilar salidas»** viene marcada, con **3 salidas permitidas** (puedes cambiar el número, de 0 a 20). Con ella:
+Al publicar, la casilla **«Vigilar salidas»** viene marcada, con **3 salidas permitidas** (puedes cambiar el número, de 0 a 20; solo lo ves tú). Con ella:
 
-- Cada vez que el alumno **cambia de pestaña, de ventana o de aplicación**, o bloquea el dispositivo, se **cuenta una salida** y se mide el **tiempo que está fuera**. Al volver ve un aviso con las salidas que lleva y las que le quedan.
-- Mientras no supere el límite, el alumno **puede seguir con el examen**: una notificación o un toque accidental no le cuesta la nota.
+- Cada vez que el alumno **cambia de pestaña, de ventana o de aplicación**, usa otra web en pantalla dividida o bloquea el dispositivo, se **cuenta una salida** y se mide el **tiempo que está fuera**.
+- **El alumno no ve cuántas salidas se permiten.** Solo se le dice que salir está prohibido, que queda registrado y que, si continúa, el examen se enviará automáticamente. Al volver tras una salida dentro del límite, ve un **aviso en rojo** de que está prohibido y de que el examen se enviará si continúa.
+- Mientras no supere el límite, el alumno puede seguir con el examen: una notificación o un toque accidental no le cuesta la nota.
 - Al **superar las salidas permitidas** (con 3, a la cuarta), el examen **se envía automáticamente** tal como esté.
 - Las salidas y el tiempo fuera **quedan siempre registrados**, tanto si el alumno envía el examen él mismo como si se envía solo o se acaba el tiempo.
 - La pantalla inicial explica la norma al alumno. Durante el examen se desactivan **copiar, cortar, pegar, el menú contextual y seleccionar texto** (frena la copia casual; no es infalible).
@@ -113,6 +114,8 @@ Al publicar, la casilla **«Vigilar salidas»** viene marcada, con **3 salidas p
 La nota se calcula con normalidad: la app **no pone un 0 automático**. Las columnas `salidas` y `segundos_fuera` son una señal para que decidas tú.
 
 **Límites que conviene conocer.** Una web puede detectar que el alumno se va, pero no impedirlo, ni ver otros dispositivos (por ejemplo, un móvil al lado). El registro lo envía el navegador del alumno. Si el alumno sale y no vuelve a abrir el examen mientras le quedan salidas, no se genera ninguna fila hasta que lo envíe. Para un bloqueo real en iPad, usa el **Acceso guiado** del propio iPad (*Ajustes → Accesibilidad → Acceso guiado*; se inicia con triple clic en el botón lateral) o el modo de app única que el centro puede activar desde su sistema de gestión de dispositivos. Se complementa con esta vigilancia.
+
+**Cómo se detecta la salida.** Se combinan varias señales, porque ninguna basta por sí sola: página oculta (otra pestaña, otra app, pantalla bloqueada), ventana sin foco, y —solo en tabletas— ventana reducida (pantalla dividida, Slide Over o Stage Manager). Si en algún dispositivo una salida no se cuenta, abre `diagnostico.html` en él: muestra en directo qué señales emite el dispositivo.
 
 Si actualizas desde una versión anterior: los exámenes ya publicados con vigilancia pasan a tener 3 salidas permitidas, los que se publicaron sin vigilancia siguen sin vigilar, y las hojas `R_<id>` antiguas reciben las columnas nuevas automáticamente.
 

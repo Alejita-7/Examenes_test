@@ -2,6 +2,7 @@
 // textContent: nunca se inserta HTML procedente del servidor.
 import { fetchExam, submitExam, beaconSubmit, NetworkError, ConfigError } from "./api.js";
 import { h } from "./dom.js";
+import { isReducedWindow, isAway } from "./presence.js";
 import { normalize, seededShuffle, formatClock, penaltyFraction, formatNumber, newSendId } from "./util.js";
 
 const MAX_TEXT = 60;
@@ -63,13 +64,9 @@ function showMessage(title, text, kind = "info") {
   render(h("div", { class: "card" }, h("h1", {}, title), h("div", { class: `notice ${kind}` }, h("p", {}, text))));
 }
 
-// Texto de la norma de salidas, para el aviso inicial.
-function exitRule(allowed) {
-  const n = Number.isFinite(Number(allowed)) ? Number(allowed) : 3;
-  const what = "Salir de la pantalla del examen (cambiar de pestaña, de ventana o de aplicación, o bloquear el dispositivo) queda registrado: tu profesor verá cuántas veces sales y cuánto tiempo estás fuera.";
-  if (n === 0) return `${what} Si sales, el examen se enviará automáticamente tal como esté.`;
-  return `${what} Puedes salir como máximo ${n} ${n === 1 ? "vez" : "veces"}; a la siguiente salida el examen se enviará automáticamente tal como esté.`;
-}
+// Norma de salidas para el alumno. No menciona cuántas salidas se toleran.
+const EXIT_RULE =
+  "No puedes salir de la pantalla del examen: no cambies de pestaña, de ventana ni de aplicación, ni uses otra web al mismo tiempo. Cada salida queda registrada con el tiempo que estés fuera y, si continúas saliendo, el examen se enviará automáticamente tal como esté.";
 
 function scoringText(questions) {
   const ks = new Set((questions ?? []).map((q) => q.options.length));
@@ -173,7 +170,7 @@ function showStart(info, exam) {
             "div",
             { class: "notice warn" },
             h("p", {}, h("strong", {}, "Examen vigilado")),
-            h("p", {}, exitRule(info.salidas_permitidas)),
+            h("p", {}, EXIT_RULE),
             h("p", {}, "Copiar y pegar está desactivado durante el examen.")
           )
         : null,
@@ -367,7 +364,7 @@ function renderExam(session) {
       motivo === "tiempo"
         ? "Se ha acabado el tiempo. Enviando tus respuestas…"
         : motivo === "salida"
-          ? "Has superado las salidas permitidas: el examen se envía automáticamente con tus respuestas actuales…"
+          ? "Has salido de la pantalla del examen: se envía automáticamente con tus respuestas actuales…"
           : "Enviando tus respuestas…"
     );
 
@@ -398,6 +395,7 @@ function renderExam(session) {
     }
 
     finished = true;
+    clearInterval(watchTimer);
     store.remove(key);
     store.remove(lastKey());
     showDone(res, motivo);
@@ -405,24 +403,18 @@ function renderExam(session) {
 
   /* --- vigilancia: cada salida se cuenta y se mide; al superar el límite se envía solo --- */
 
-  const exitsBadge = h("span", { class: "exits-badge", hidden: !watched });
-  const updateExits = () => {
-    exitsBadge.textContent = `Salidas: ${progress.salidas} de ${allowed}`;
-    exitsBadge.classList.toggle("low", progress.salidas >= allowed);
-  };
-
   function warnReturn() {
-    const left = allowed - progress.salidas;
-    const dialog = h("dialog");
+    const dialog = h("dialog", { class: "warning" });
     const close = () => {
       dialog.close();
       dialog.remove();
     };
     dialog.append(
-      h("h2", {}, "Has salido del examen"),
-      h("p", {}, `Es tu salida número ${progress.salidas} de ${allowed} permitidas. Ha quedado registrada, junto con el tiempo que has estado fuera.`),
-      h("p", {}, left > 0 ? `Te ${left === 1 ? "queda 1 salida" : `quedan ${left} salidas`}. Cuando se acaben, si vuelves a salir, el examen se enviará automáticamente tal como esté.` : "Ya no te quedan salidas: si vuelves a salir, el examen se enviará automáticamente tal como esté."),
-      h("div", { class: "actions" }, h("button", { type: "button", class: "btn", onclick: close }, "Continuar con el examen"))
+      h("h2", {}, "⚠ AVISO: has salido del examen"),
+      h("p", {}, h("strong", {}, "Está prohibido salir de la pantalla del examen.")),
+      h("p", {}, "Esta salida ha quedado registrada, junto con el tiempo que has estado fuera, y tu profesor la verá."),
+      h("p", {}, h("strong", {}, "Si continúas saliendo, el examen se enviará automáticamente tal como esté.")),
+      h("div", { class: "actions" }, h("button", { type: "button", class: "btn danger", onclick: close }, "Entendido, volver al examen"))
     );
     document.body.append(dialog);
     dialog.addEventListener("cancel", () => dialog.remove());
@@ -434,7 +426,6 @@ function renderExam(session) {
     progress.salidas += 1;
     progress.leftAt = Date.now();
     save();
-    updateExits();
     // Solo al superar el límite se avisa al servidor. La página puede congelarse al cambiar
     // de app, así que se usa sendBeacon; al volver se reenvía con el mismo envioId.
     if (overLimit()) beaconSubmit(buildPayload("salida"));
@@ -445,26 +436,61 @@ function renderExam(session) {
     progress.segundosFuera += (Date.now() - progress.leftAt) / 1000;
     progress.leftAt = null;
     save();
-    updateExits();
     if (overLimit()) send("salida");
     else warnReturn();
   }
 
-  if (watched) {
-    document.addEventListener("visibilitychange", () => (document.hidden ? onLeave() : onReturn()));
-    window.addEventListener("pagehide", onLeave);
-    window.addEventListener("blur", onLeave);
-    window.addEventListener("focus", onReturn);
-    window.addEventListener("pageshow", onReturn);
+  /*
+   * ¿Sigue el alumno en la pantalla del examen? Se combinan varias señales, porque ninguna basta:
+   * - página oculta (otra pestaña/app, pantalla bloqueada),
+   * - evento blur (otra ventana activa),
+   * - document.hasFocus() en false durante 1 s (el iPad no siempre emite blur en pantalla dividida),
+   * - ventana reducida (pantalla dividida, Slide Over, Stage Manager en tabletas).
+   */
+  const signals = { hidden: false, blurred: false, reduced: false };
+  let noFocusSince = 0;
+  let focusSeen = false; // hasFocus() solo cuenta si alguna vez ha sido true en este examen
+  let watchTimer = null;
+
+  function evaluateAway() {
+    if (!watched || sending || finished) return;
+    signals.hidden = document.hidden;
+    signals.reduced = isReducedWindow({
+      innerWidth: window.innerWidth,
+      innerHeight: window.innerHeight,
+      screenWidth: window.screen?.width,
+      screenHeight: window.screen?.height,
+      coarse: window.matchMedia?.("(pointer: coarse)").matches ?? false,
+    });
+    if (document.hasFocus()) {
+      focusSeen = true;
+      noFocusSince = 0;
+    } else if (focusSeen && !noFocusSince) {
+      noFocusSince = Date.now();
+    }
+    const away = isAway({ ...signals, noFocusMs: noFocusSince ? Date.now() - noFocusSince : 0 });
+    if (away && !progress.leftAt) onLeave();
+    else if (!away && progress.leftAt) onReturn();
   }
 
-  const bar = h("div", { class: "exam-bar" }, counter, exitsBadge, limitSeconds ? timer : null);
+  if (watched) {
+    document.addEventListener("visibilitychange", evaluateAway);
+    window.addEventListener("blur", () => { signals.blurred = true; evaluateAway(); });
+    window.addEventListener("focus", () => { signals.blurred = false; evaluateAway(); });
+    window.addEventListener("pagehide", () => { signals.hidden = true; onLeave(); });
+    window.addEventListener("pageshow", evaluateAway);
+    window.addEventListener("resize", evaluateAway);
+    window.addEventListener("orientationchange", evaluateAway);
+    watchTimer = setInterval(evaluateAway, 500);
+  }
+
+  const bar = h("div", { class: "exam-bar" }, counter, limitSeconds ? timer : null);
   const screen = h(
     "div",
     { class: watched ? "exam-screen no-copy" : "exam-screen" },
     h("h1", {}, exam.titulo),
     h("p", { class: "muted" }, `${who.nombre} · ${who.grupo}`),
-    watched ? h("p", { class: "muted small" }, "Examen vigilado: " + exitRule(allowed)) : null,
+    watched ? h("p", { class: "muted small" }, "Examen vigilado: no salgas de esta pantalla. Las salidas quedan registradas y, si continúas, el examen se envía automáticamente.") : null,
     bar,
     fieldset,
     reviewBtn,
@@ -479,7 +505,6 @@ function renderExam(session) {
   }
   render(screen);
   updateCounter();
-  updateExits();
   window.scrollTo(0, 0);
 
   if (limitSeconds) {
@@ -499,7 +524,6 @@ function renderExam(session) {
     progress.segundosFuera += (Date.now() - progress.leftAt) / 1000;
     progress.leftAt = null;
     save();
-    updateExits();
     if (!overLimit()) warnReturn();
   }
   if (watched && overLimit() && !sending) send("salida");
@@ -514,7 +538,7 @@ function showDone(res, motivo = "manual") {
       h("h1", {}, "Examen enviado correctamente"),
       h("div", { class: "notice ok" }, h("p", {}, "Ya puedes cerrar esta página.")),
       motivo === "salida"
-        ? h("div", { class: "notice warn" }, h("p", {}, "El examen se ha enviado automáticamente porque superaste las salidas permitidas. Tu profesor lo verá registrado."))
+        ? h("div", { class: "notice warn" }, h("p", {}, "El examen se ha enviado automáticamente porque has salido de la pantalla del examen. Tu profesor lo verá registrado."))
         : null,
       hasScore
         ? [

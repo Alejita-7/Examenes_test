@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Diagnóstico de salidas</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <main class="page">
+    <h1>Diagnóstico de salidas</h1>
+    <p class="muted">Página para comprobar qué señales emite este dispositivo cuando el alumno sale del examen. Ábrela en el iPad, cambia de app, pon otra web al lado (pantalla dividida), vuelve y mira el registro.</p>
+
+    <div class="card">
+      <h2>Estado ahora</h2>
+      <table class="exams" id="state"></table>
+    </div>
+
+    <div class="card">
+      <h2>Registro de eventos</h2>
+      <p class="muted small">Cada línea indica los segundos desde que abriste la página. Sube las capturas si algo no cuenta.</p>
+      <div class="actions" style="margin-bottom:10px"><button class="btn secondary small" id="clear" type="button">Borrar registro</button></div>
+      <pre id="log" style="white-space:pre-wrap;font-size:0.85rem;margin:0"></pre>
+    </div>
+  </main>
+  <script type="module">
+    import { isReducedWindow, isAway, REDUCED_RATIO } from "./js/presence.js";
+    const t0 = Date.now();
+    const log = document.getElementById("log");
+    const state = document.getElementById("state");
+    const snap = () => ({
+      hasFocus: document.hasFocus(),
+      hidden: document.hidden,
+      ventana: `${innerWidth}x${innerHeight}`,
+      pantalla: `${screen.width}x${screen.height}`,
+      proporcion: ((innerWidth * innerHeight) / (screen.width * screen.height)).toFixed(2),
+      tactil: matchMedia("(pointer: coarse)").matches,
+    });
+    const reduced = () => isReducedWindow({ innerWidth, innerHeight, screenWidth: screen.width, screenHeight: screen.height, coarse: matchMedia("(pointer: coarse)").matches });
+    function write(kind) {
+      const s = snap();
+      const line = `${((Date.now() - t0) / 1000).toFixed(1).padStart(6)} s  ${kind.padEnd(16)} foco=${s.hasFocus} oculta=${s.hidden} ventana=${s.ventana} prop=${s.proporcion}`;
+      log.textContent = line + "\n" + log.textContent;
+    }
+    for (const [target, names] of [[window, ["blur", "focus", "pagehide", "pageshow", "resize", "orientationchange"]], [document, ["visibilitychange"]]]) {
+      for (const n of names) target.addEventListener(n, () => write(n));
+    }
+    function paint() {
+      const s = snap();
+      const rows = [
+        ["La página tiene el foco (hasFocus)", s.hasFocus],
+        ["La página está oculta", s.hidden],
+        ["Tamaño de la ventana", s.ventana],
+        ["Tamaño de la pantalla", s.pantalla],
+        [`Proporción ventana/pantalla (se considera pantalla dividida por debajo de ${REDUCED_RATIO})`, s.proporcion],
+        ["Pantalla táctil", s.tactil],
+        ["¿Cuenta como pantalla dividida?", reduced()],
+        ["¿Contaría como salida?", isAway({ hidden: s.hidden, reduced: reduced(), noFocusMs: s.hasFocus ? 0 : 1000 })],
+      ];
+      state.replaceChildren(...rows.map(([k, v]) => { const tr = document.createElement("tr"); const a = document.createElement("td"); a.textContent = k; const b = document.createElement("td"); b.textContent = String(v); b.style.fontWeight = "700"; tr.append(a, b); return tr; }));
+    }
+    document.getElementById("clear").addEventListener("click", () => (log.textContent = ""));
+    paint(); setInterval(paint, 500); write("inicio");
+  </script>
+</body>
+</html>

@@ -66,17 +66,19 @@ Otros casos rápidos (cada uno es un envío más, con otro nombre):
 
 ## 4b. Examen vigilado (control de salidas)
 
-Publica un examen con **Vigilar salidas** marcado y **2 salidas permitidas** (así se prueba rápido). Hazlo desde un iPad o móvil, con un nombre distinto en cada prueba:
+Publica un examen con **Vigilar salidas** marcado y **2 salidas permitidas** (así se prueba rápido; el alumno nunca ve este número). Hazlo desde un iPad o móvil, con un nombre distinto en cada prueba:
 
-- [ ] La pantalla inicial explica la norma («Puedes salir como máximo 2 veces…»).
-- [ ] Arriba aparece el contador «Salidas: 0 de 2». No se puede seleccionar ni copiar el texto de las preguntas.
-- [ ] **Salida 1:** sal a la pantalla de inicio, espera unos 5 segundos y vuelve. Aparece un aviso («salida número 1 de 2») y **sigues pudiendo hacer el examen** con tus respuestas intactas. El contador marca «1 de 2». En la hoja todavía **no hay fila**.
-- [ ] **Salida 2:** igual. El contador marca «2 de 2» y sigues dentro.
-- [ ] **Salida 3:** al salir por tercera vez y volver, el examen aparece enviado, con el aviso «superaste las salidas permitidas».
+- [ ] La pantalla inicial dice que **no se puede salir** de la pantalla del examen y que, si continúa saliendo, se enviará automáticamente. **No** menciona cuántas salidas se permiten, y durante el examen **no hay ningún contador** de salidas.
+- [ ] No se puede seleccionar ni copiar el texto de las preguntas.
+- [ ] **Salida 1:** sal a la pantalla de inicio, espera unos 5 segundos y vuelve. Aparece un aviso rojo («AVISO: has salido del examen… Está prohibido… si continúas saliendo, el examen se enviará») y **sigues pudiendo hacer el examen** con tus respuestas intactas. En la hoja todavía **no hay fila**.
+- [ ] **Salida 2:** igual. El aviso aparece de nuevo y sigues dentro.
+- [ ] **Salida 3:** al salir por tercera vez y volver, el examen aparece enviado, con el aviso «se ha enviado automáticamente porque has salido de la pantalla del examen».
 - [ ] En `R_<id>` hay **una sola fila** con `salidas` = 3, `tipo_envio` = `salida` y `segundos_fuera` con la suma del tiempo de las salidas.
 - [ ] Prueba con otro nombre: sal **una vez** y envía tú el examen con el botón. La fila debe tener `salidas` = 1, `tipo_envio` = `manual` y `segundos_fuera` > 0.
-- [ ] Prueba con otro nombre: sal una vez y **recarga la página** sin enviar. Al volver a entrar con el mismo nombre y grupo, sigues dentro del examen con el contador en «1 de 2».
+- [ ] Prueba con otro nombre: sal una vez y **recarga la página** sin enviar. Al volver a entrar con el mismo nombre y grupo, sigues dentro del examen (verás el aviso rojo).
 - [ ] Prueba cambiar de pestaña y bloquear la pantalla: ambas cuentan como salida.
+- [ ] **Pantalla dividida (iPad):** con el examen en una mitad y otra web en la otra, el examen cuenta **1 salida** (por el cambio de tamaño de la ventana), aunque no toques la otra web, y el tiempo corre hasta que vuelves a pantalla completa. Si no cuenta, abre `diagnostico.html` en el iPad, repite la prueba y revisa qué señales aparecen.
+- [ ] Girar el iPad (vertical/horizontal) **no** cuenta como salida.
 - [ ] En un examen **sin** vigilar, cambiar de app no cuenta nada ni avisa.
 - [ ] Un examen publicado antes de esta versión sigue funcionando.
 

@@ -2,8 +2,9 @@
 
 Aplicación web **gratuita** para publicar exámenes tipo test (por ejemplo, de Física y Química), compartirlos con un enlace y recibir los resultados ya corregidos **con penalización por error**.
 
-- Los alumnos **no necesitan cuenta**: abren el enlace, escriben nombre y grupo y hacen el examen (también desde el móvil).
-- Los errores restan y las preguntas en blanco no. Con 4 opciones, cada error resta 1/3 de punto.
+- Los alumnos **no necesitan cuenta**: abren el enlace, escriben su nombre, apellidos y grupo, y hacen el examen (también desde el móvil o el iPad).
+- Los errores restan y las preguntas en blanco no. La **penalización por error** (siempre una fracción de punto: 1/3, 1/4, 2/5…) la eliges tú al publicar cada examen.
+- Las preguntas pueden llevar **imágenes** (gráficas, esquemas, fotos), y el examen puede **vigilar si el alumno sale de la pantalla**.
 - La corrección se hace en el servidor (Google Apps Script), no en el navegador del alumno.
 - Los resultados se guardan en una hoja de cálculo de Google tuya.
 
@@ -22,7 +23,7 @@ Tardarás unos 20 minutos. Necesitas una cuenta de Google y una de GitHub.
 
 ### Parte 1. Crear tu copia del repositorio
 
-1. Entra en el repositorio en GitHub y pulsa **Fork** (arriba a la derecha) para tener tu propia copia, o crea un repositorio nuevo y sube estos archivos.
+1. Entra en el repositorio en GitHub y pulsa **Fork** (arriba a la derecha) para tener tu propia copia, o crea un repositorio nuevo y sube estos archivos. Cada profesor debe tener **su propia copia, su propia hoja de Google y su propio token**: así nadie ve las soluciones ni las notas de otro.
 2. Comprueba que el repositorio es **público**.
 
 ### Parte 2. La hoja de cálculo y el script (backend)
@@ -43,7 +44,7 @@ Tardarás unos 20 minutos. Necesitas una cuenta de Google y una de GitHub.
 
 ### Parte 3. Conectar la web con el script
 
-1. En tu repositorio, edita el archivo [`js/config.js`](js/config.js) (en GitHub: abrir el archivo → icono del lápiz) y pega la URL entre las comillas:
+1. En tu repositorio, edita el archivo [`js/config.js`](js/config.js) (en GitHub: abrir el archivo → icono del lápiz) y **sustituye la URL que trae por la tuya** (el repositorio original lleva la de su autor):
 
    ```js
    export const APPS_SCRIPT_URL = "https://script.google.com/macros/s/XXXXXXXX/exec";
@@ -83,6 +84,15 @@ Escribe las preguntas en un archivo de texto con este formato (la respuesta corr
 }
 ```
 
+**Reglas del formato:**
+- Una pregunta por bloque; los bloques se separan con una línea en blanco.
+- El título `::P01::` es opcional.
+- Cada pregunta tiene **exactamente una** opción correcta (`=`) y al menos dos opciones en total.
+- Si exportas desde Moodle, los pesos `%-33.33333%` se ignoran: la penalización la calcula la aplicación.
+- Para escribir los caracteres `: = ~ # { }` dentro de un texto, ponles delante una barra invertida (`\=`, `\{`…).
+
+**Guarda estos archivos fuera del repositorio** (llevan las soluciones). El `.gitignore` bloquea `*.gift` y `*.txt`, pero lo más seguro es no ponerlos nunca en la carpeta del proyecto.
+
 ### Imágenes en las preguntas
 
 En el enunciado puedes poner una imagen con esta marca, que lleva **solo el nombre del archivo**:
@@ -106,20 +116,11 @@ Límites: hasta **12 imágenes por examen** y unos **1,5 MB** en total. Solo van
 
 Requiere `Code.gs` actualizado: si no lo está, el panel lo detecta y **no publica** (para no dejar un examen sin imágenes). No borres la pestaña `Imagenes`.
 
-Reglas:
-- Una pregunta por bloque; los bloques se separan con una línea en blanco.
-- El título `::P01::` es opcional.
-- Cada pregunta tiene **exactamente una** opción correcta (`=`) y al menos dos opciones en total.
-- Si exportas desde Moodle, los pesos `%-33.33333%` se ignoran: la penalización la calcula la aplicación.
-- Para escribir los caracteres `: = ~ # { }` dentro de un texto, ponles delante una barra invertida (`\=`, `\{`…).
-
-**Guarda estos archivos fuera del repositorio** (llevan las soluciones). El `.gitignore` bloquea `*.gift` y `*.txt`, pero lo más seguro es no ponerlos nunca en la carpeta del proyecto.
-
 ### Publicar
 
 1. Abre `admin.html` e introduce tu token (se guarda solo en tu navegador).
 2. En **Crear examen**, sube el archivo (o pega el texto). Verás una vista previa con la respuesta correcta marcada; revisa que sea la que esperas. Si hay errores, la pantalla te dice en qué pregunta.
-3. Rellena los ajustes: título, grupo, tiempo límite, código de acceso (opcional), barajar preguntas y opciones, mostrar la nota al terminar, permitir nota negativa y vigilar salidas (con cuántas salidas se permiten).
+3. Rellena los ajustes: título, grupo, tiempo límite, código de acceso (opcional), **penalización por cada error**, barajar preguntas y opciones, mostrar la nota al terminar, permitir nota negativa, **vigilar salidas** (con cuántas se permiten) y, opcionalmente, **exigir pantalla completa**.
 4. **Publicar examen.** Obtendrás un **enlace** y un **código QR** para dárselos a los alumnos.
 
 ### Examen vigilado (control de salidas)
@@ -128,12 +129,12 @@ Al publicar, la casilla **«Vigilar salidas»** viene marcada, con **3 salidas p
 
 - Cada vez que el alumno **cambia de pestaña, de ventana o de aplicación**, usa otra web en pantalla dividida o bloquea el dispositivo, se **cuenta una salida** y se mide el **tiempo que está fuera**.
 - **El alumno no ve cuántas salidas se permiten.** Solo se le dice que salir está prohibido, que queda registrado y que, si continúa, el examen se enviará automáticamente. Al volver tras una salida dentro del límite, ve un **aviso en rojo** de que está prohibido y de que el examen se enviará si continúa.
-- **Si la ventana no está a pantalla completa, el examen se oculta.** Mientras el alumno esté en pantalla dividida, con la ventana reducida o fuera del examen, no puede ver ni contestar las preguntas: aparece «Examen oculto. Vuelve a la pantalla completa del examen para continuar». El tiempo fuera se sigue registrando. Esto se aplica a tabletas (iPad, Android); en ordenadores y móviles se oculta al salir de la pestaña o de la app.
+- **Mientras el alumno está «fuera», el examen se oculta.** Si está en pantalla dividida, con la ventana reducida, en otra pestaña o app, no puede ver ni contestar las preguntas: aparece «Examen oculto. Vuelve a la ventana completa del examen para continuar». El tiempo fuera se sigue registrando.
 - Mientras no supere el límite, el alumno puede seguir con el examen: una notificación o un toque accidental no le cuesta la nota.
 - Al **superar las salidas permitidas** (con 3, a la cuarta), el examen **se envía automáticamente** tal como esté.
 - Las salidas y el tiempo fuera **quedan siempre registrados**, tanto si el alumno envía el examen él mismo como si se envía solo o se acaba el tiempo.
 - La pantalla inicial explica la norma al alumno. Durante el examen se desactivan **copiar, cortar, pegar, el menú contextual y seleccionar texto** (frena la copia casual; no es infalible).
-- En la hoja de resultados aparecen cuatro columnas más: `salidas`, `segundos_fuera`, `tipo_envio` (`manual`, `tiempo` o `salida`), `envio_id` y `motivos_salida`.
+- En la hoja de resultados aparecen cinco columnas más: `salidas`, `segundos_fuera`, `tipo_envio` (`manual`, `tiempo` o `salida`), `envio_id` y `motivos_salida`.
 
 La nota se calcula con normalidad: la app **no pone un 0 automático**. Las columnas `salidas` y `segundos_fuera` son una señal para que decidas tú.
 
@@ -153,11 +154,9 @@ La pantalla completa es opcional porque su comportamiento depende mucho del nave
 
 **Al empezar no se penaliza nada.** Mientras el examen no esté bien colocado (por ejemplo, empezado en pantalla dividida, o sin pantalla completa si la has exigido), el alumno ve un aviso («Pon el examen a toda la pantalla… Esto todavía no cuenta como salida») y la vigilancia no empieza hasta que lleva 1,5 s seguidos en buen estado. Si el navegador no permite la pantalla completa, no se exige. Tras pedirla, se esperan 2,5 s a que el navegador termine de cambiar de tamaño.
 
-Mientras el alumno está «fuera» por cualquiera de las señales, el examen se oculta. Cada salida guarda en la hoja **qué señal la provocó** (`motivos_salida`, por ejemplo `reduced,hidden`): si en algún dispositivo salen salidas que no esperas, esa columna dice la causa.
+Cada salida guarda en la hoja **qué señal la provocó** (`motivos_salida`, por ejemplo `reduced,hidden`): si en algún dispositivo salen salidas que no esperas, esa columna dice la causa.
 
 **Lo que ninguna web puede detectar.** En un iPad, una app flotante (Slide Over) que se coloca encima **sin reducir ni quitar el foco a la ventana** no emite ninguna señal. Lo mismo ocurre con un móvil o un papel junto al ordenador. La medida eficaz para esos casos es el **Acceso guiado** del iPad (o el modo de app única del centro), que además impide abrir apps flotantes. Si en algún dispositivo una salida no se cuenta, abre `diagnostico.html` en él: muestra en directo qué señales emite.
-
-Si actualizas desde una versión anterior: los exámenes ya publicados con vigilancia pasan a tener 3 salidas permitidas, los que se publicaron sin vigilancia siguen sin vigilar, y las hojas `R_<id>` antiguas reciben las columnas nuevas automáticamente.
 
 ### Ver resultados
 
@@ -192,21 +191,35 @@ El panel muestra un ejemplo con la fracción elegida (12 aciertos, 5 errores y 3
 
 `nota = (aciertos − errores × penalización) / nº de preguntas × 10`, redondeada a 2 decimales. Por defecto la nota mínima es 0 (se puede permitir negativa al publicar el examen).
 
-Si actualizas desde una versión anterior: los exámenes ya publicados siguen con la penalización automática. Para usar una penalización elegida, **actualiza `Code.gs` en Google** (Nueva versión); si publicas con un script antiguo, el panel te avisa de que la penalización elegida no se aplicará.
+Los exámenes ya publicados antes de poder elegir la penalización siguen con la automática. Si publicas con un `Code.gs` antiguo, el panel te avisa de que la penalización elegida no se aplicará.
 
 ---
 
-## Modificar el script más adelante
+## Actualizar a una versión nueva
 
-Si cambias `Code.gs`, hay que publicar una **versión nueva sin cambiar la URL**:
+Cuando haya mejoras en el repositorio original:
 
-**Implementar → Gestionar implementaciones → ✏️ Editar → Versión: Nueva versión → Implementar.**
+1. **Tu copia en GitHub:** en tu repositorio pulsa **Sync fork → Update branch**. Tu `js/config.js` (con tu URL) se conserva mientras no haya cambios del original en ese archivo; compruébalo después. Si aparece un conflicto, **conserva tu propia URL**, nunca elijas «descartar cambios».
+2. **Tu script de Google:** el backend vive en Google, no en GitHub, así que hay que copiarlo a mano. Abre `apps-script/Code.gs`, copia todo (botón **Copy raw file**), pégalo en el editor de Apps Script y guarda.
+3. Publica una **versión nueva sin cambiar la URL**: **Implementar → Gestionar implementaciones → ✏️ Editar → Versión: Nueva versión → Implementar**. Si eliges «Nueva implementación» obtendrás una URL distinta y tendrás que actualizar `js/config.js`.
+4. **Publica de nuevo** los exámenes que quieras que usen las novedades (los ya publicados conservan su comportamiento y su hoja).
 
-Si en su lugar eliges «Nueva implementación» obtendrás una URL distinta y tendrás que actualizar `js/config.js`.
+Si el panel te dice que el script no está actualizado (al publicar con penalización elegida, pantalla completa o imágenes), es que falta el paso 2 o el 3.
+
+Si tu copia (fork) se creó cuando la rama por defecto no era `main`, en tu repositorio puedes renombrar esa rama a `main` (**Settings → Branches → Rename branch**) y comprobar en **Settings → Pages** que sigue publicando desde ella.
+
+## Si los alumnos usan los iPad o los ordenadores del centro
+
+Los filtros web de algunos centros bloquean dominios. La aplicación necesita llegar a:
+
+- `TU_USUARIO.github.io` (la página del examen),
+- `script.google.com` y `script.googleusercontent.com` (el servidor que corrige y guarda).
+
+Si el examen no carga en los dispositivos del centro pero sí con datos móviles, pide al responsable informático que permita esos dominios. Los alumnos no inician sesión en nada.
 
 ## Qué datos se guardan
 
-Solo **nombre, grupo, respuestas y nota** de cada alumno, en tu hoja de Google. No se piden correos ni otros datos y los alumnos no tienen cuenta. No compartas la hoja con nadie: contiene las soluciones y los nombres. Recuerda informar a las familias de este tratamiento según la política de tu centro.
+Solo **nombre, apellidos, grupo, respuestas, nota y los datos de las salidas del examen** (cuántas y cuánto tiempo, si vigilas) de cada alumno, en tu hoja de Google. Las imágenes de los enunciados también se guardan ahí. No se piden correos ni otros datos y los alumnos no tienen cuenta. No compartas la hoja con nadie: contiene las soluciones y los nombres. Recuerda informar a las familias de este tratamiento según la política de tu centro.
 
 ## Problemas frecuentes
 
@@ -219,6 +232,12 @@ Solo **nombre, grupo, respuestas y nota** de cada alumno, en tu hoja de Google. 
 | Cambié `Code.gs` pero nada cambia | Falta publicar una **Nueva versión** de la implementación (ver arriba). |
 | «El examen es demasiado grande» | Supera el límite de una celda de Google Sheets (~49 000 caracteres). Divídelo en dos exámenes. |
 | GitHub Pages da error 404 | Espera unos minutos tras activarlo y comprueba rama y carpeta en *Settings → Pages*. |
+| «El script de Google no está actualizado…» al publicar | Tu `Code.gs` es anterior a la web. Cópialo de nuevo y publica una **Nueva versión** (ver «Actualizar a una versión nueva»). |
+| Al publicar con imágenes: «Falta la imagen…» o el botón está deshabilitado | Sube todas las imágenes que cita el GIFT, con el mismo nombre de archivo. Las citas deben llevar solo el nombre (sin carpetas ni `http`). |
+| El examen no carga en los iPad del centro pero sí en el móvil con datos | El filtro del centro bloquea algún dominio: ver «Si los alumnos usan los iPad o los ordenadores del centro». |
+| Los alumnos ven «Pon el examen a toda la pantalla» y no avanza | Tienen la ventana reducida o en pantalla dividida: que la amplíen. Si ocurre a pantalla completa, abre `diagnostico.html` en ese dispositivo y mira la «Proporción». |
+| Una salida que no esperabas en la hoja | Mira la columna `motivos_salida` de esa fila: dice qué señal la provocó. |
+| Los resultados no salen ordenados por apellidos | Es una hoja de un examen publicado antes del cambio: publica el examen de nuevo. |
 
 ## Para desarrolladores
 
@@ -226,16 +245,22 @@ No hay paso de compilación: HTML, CSS y JavaScript con módulos ES nativos.
 
 ```
 index.html, admin.html     Páginas del alumno y del profesor
+diagnostico.html           Muestra en directo las señales de vigilancia de un dispositivo
 css/styles.css             Estilos (claro y oscuro)
 js/config.js               URL del Apps Script
 js/api.js                  Llamadas al Apps Script (POST como text/plain, sin preflight CORS)
 js/student.js, admin.js    Lógica de cada página
 js/gift.js                 Parser GIFT (función pura)
-js/grading.js              Corrección (función pura; replicada en Code.gs)
+js/grading.js              Corrección y penalización fraccionaria (pura; replicada en Code.gs)
+js/images.js               Citas de imágenes ![alt](archivo.png) y límites (puro; réplica parcial en Code.gs)
+js/image-encode.js         Reduce y codifica las imágenes en el navegador (canvas)
+js/rich.js                 Pinta un enunciado con imágenes sin insertar HTML
+js/watch.js                Máquina de estados de la vigilancia (pura; márgenes por señal)
+js/presence.js             ¿Ventana reducida? (pura)
 js/util.js, dom.js         Utilidades
 js/vendor/qrcode.js        qrcode-generator 1.4.4 (MIT), incluido para no depender de un CDN
 apps-script/Code.gs        Backend (se copia a mano al editor de Apps Script)
-tests/                     Tests con Node
+tests/                     Tests con Node (incluye una hoja de Google simulada)
 ```
 
 Tests (requieren Node 20 o superior; no hay dependencias que instalar):
@@ -246,4 +271,4 @@ node --test
 
 Guía de validación con Google real: [docs/PRUEBA_FINAL.md](docs/PRUEBA_FINAL.md).
 
-`tests/codegs.test.js` carga `Code.gs` con una hoja de cálculo simulada y comprueba que su corrección coincide con `js/grading.js`. **Si cambias la lógica de corrección en uno de los dos archivos, cámbiala también en el otro.**
+`tests/codegs.test.js` carga `Code.gs` con una hoja de cálculo simulada (`tests/fake-gas.js`, que imita también conversiones automáticas de Sheets como `1/3` → fecha) y comprueba que su corrección coincide con `js/grading.js` con miles de casos aleatorios. **Si cambias la lógica de corrección o el formato de las citas de imágenes en uno de los dos archivos, cámbiala también en el otro.**

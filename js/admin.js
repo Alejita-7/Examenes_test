@@ -4,6 +4,9 @@ import { parseGift, GiftError } from "./gift.js";
 import { h } from "./dom.js";
 import { studentLink, randomCode, formatNumber } from "./util.js";
 import { parsePenalty } from "./grading.js";
+import { collectImageRefs, matchImage, MAX_IMAGES, MAX_TOTAL_IMAGE_CHARS } from "./images.js";
+import { prepareImage } from "./image-encode.js";
+import { richNodes } from "./rich.js";
 
 const TOKEN_KEY = "admin_token";
 const WARN_CHARS = 45000;
@@ -210,6 +213,10 @@ function renderCreate(box, { onPublished, onUnauthorized }) {
   const file = h("input", { type: "file", accept: ".txt,.gift,text/plain" });
   const gift = h("textarea", { name: "gift", spellcheck: "false", placeholder: "::P01::Pregunta{\n=Correcta\n~Incorrecta\n~Incorrecta\n}" });
   const preview = h("div");
+  const imagesBox = h("div");
+  const provided = new Map(); // nombre del archivo (en minúsculas) -> imagen ya reducida
+  let imageRefs = { names: [], invalid: [] };
+  let tooBig = false;
 
   const titulo = h("input", { name: "titulo", maxlength: 120, required: true });
   const grupo = h("input", { name: "grupo", maxlength: 60 });
@@ -289,9 +296,11 @@ function renderCreate(box, { onPublished, onUnauthorized }) {
   function update() {
     questions = null;
     preview.replaceChildren();
+    imageRefs = { names: [], invalid: [] };
+    tooBig = false;
     publish.disabled = true;
     const text = gift.value.trim();
-    if (!text) return;
+    if (!text) return renderImages();
     try {
       questions = parseGift(text);
     } catch (e) {
@@ -299,10 +308,11 @@ function renderCreate(box, { onPublished, onUnauthorized }) {
       preview.append(
         h("div", { class: "notice error", role: "alert" }, h("p", {}, h("strong", {}, "Hay errores en el archivo; corrígelos para poder publicar:")), e.errors.map((m) => h("p", {}, m)))
       );
-      return;
+      return renderImages();
     }
+    imageRefs = collectImageRefs(questions);
     const size = JSON.stringify(questions).length;
-    const tooBig = size > MAX_CHARS;
+    tooBig = size > MAX_CHARS;
     preview.append(
       h("p", {}, h("strong", {}, `${questions.length} preguntas`), ` · ${size.toLocaleString("es-ES")} de 50 000 caracteres`),
       tooBig ? notice("error", "El examen es demasiado grande para una celda de Google Sheets. Divídelo en dos exámenes.") : size > WARN_CHARS ? notice("warn", "El examen está cerca del límite de tamaño de una celda de Google Sheets.") : null,
@@ -313,13 +323,87 @@ function renderCreate(box, { onPublished, onUnauthorized }) {
           h(
             "div",
             { class: "q-preview" },
-            h("strong", {}, `${i + 1}. `, q.title ? `[${q.title}] ` : "", q.text),
+            h("div", { class: "q-text" }, h("strong", {}, `${i + 1}. `, q.title ? `[${q.title}] ` : ""), ...richNodes(q.text, imageMap())),
             h("ol", {}, q.options.map((o) => h("li", { class: o.id === q.correct ? "correct" : null }, o.text, o.id === q.correct ? " ✓" : "")))
           )
         )
       )
     );
-    publish.disabled = tooBig;
+    renderImages();
+  }
+
+  // Imágenes ya subidas, por el nombre con que se citan en las preguntas: {"grafica1.png": "data:..."}
+  function imageMap() {
+    const map = {};
+    for (const name of imageRefs.names) {
+      const img = matchImage(name, [...provided.values()]);
+      if (img) map[name] = img.url;
+    }
+    return map;
+  }
+
+  const imgInput = h("input", { type: "file", accept: "image/png,image/jpeg,image/webp,image/gif", multiple: true });
+  const imgStatus = h("div");
+  imgInput.addEventListener("change", async () => {
+    const files = [...imgInput.files];
+    imgInput.value = "";
+    imgStatus.replaceChildren(notice("info", "Reduciendo las imágenes…"));
+    const errs = [];
+    for (const f of files) {
+      try {
+        const img = await prepareImage(f);
+        provided.set(f.name.toLowerCase(), { name: f.name, ...img });
+      } catch (e) {
+        errs.push(e.message);
+      }
+    }
+    imgStatus.replaceChildren(...errs.map((m) => notice("error", m)));
+    update();
+  });
+
+  // Panel de imágenes: qué cita el GIFT, cuáles faltan y cuánto pesan. Decide si se puede publicar.
+  function renderImages() {
+    const { names, invalid } = imageRefs;
+    const have = names.filter((n) => matchImage(n, [...provided.values()]));
+    const missing = names.filter((n) => !have.includes(n) && !invalid.includes(n));
+    const unused = [...provided.values()].filter((f) => !names.some((n) => n.toLowerCase() === f.name.toLowerCase()));
+    const chars = have.reduce((sum, n) => sum + matchImage(n, [...provided.values()]).chars, 0);
+    const tooMany = names.length > MAX_IMAGES;
+    const tooHeavy = chars > MAX_TOTAL_IMAGE_CHARS;
+
+    imagesBox.replaceChildren();
+    if (questions && (names.length || provided.size)) {
+      imagesBox.append(
+        h(
+          "div",
+          { class: "card" },
+          h("h2", {}, "Imágenes de las preguntas"),
+          names.length
+            ? h("p", { class: "muted small" }, "El examen cita estas imágenes. Selecciónalas todas a la vez (PNG, JPEG, WebP o GIF): se reducen automáticamente y se guardan en tu hoja de Google.")
+            : null,
+          h("label", { class: "field" }, h("span", {}, "Añadir imágenes"), imgInput),
+          imgStatus,
+          invalid.map((n) => notice("error", `La cita «${n}» no es válida: escribe solo el nombre del archivo (sin carpetas ni direcciones de internet), por ejemplo ![gráfica](grafica1.png).`)),
+          names
+            .filter((n) => !invalid.includes(n))
+            .map((n) => {
+              const img = matchImage(n, [...provided.values()]);
+              return h(
+                "div",
+                { class: "img-row" },
+                img ? h("img", { class: "img-thumb", src: img.url, alt: "" }) : h("span", { class: "img-thumb empty" }, "?"),
+                h("span", {}, h("strong", {}, n), " ", img ? h("span", { class: "muted small" }, `✓ ${img.width}×${img.height} px · ${Math.round((img.chars * 3) / 4 / 1024)} KB`) : h("span", { class: "badge off" }, "falta"))
+              );
+            }),
+          unused.length ? h("p", { class: "muted small" }, `Sin usar (no se citan en el GIFT): ${unused.map((f) => f.name).join(", ")}`) : null,
+          tooMany ? notice("error", `Demasiadas imágenes: el máximo es ${MAX_IMAGES} por examen.`) : null,
+          tooHeavy ? notice("error", "Las imágenes pesan demasiado en total (máximo unos 1,5 MB). Quita alguna o usa imágenes más pequeñas.") : null,
+          names.length ? h("p", { class: "muted small" }, `${have.length} de ${names.length} imágenes subidas · ${Math.round((chars * 3) / 4 / 1024)} KB en total`) : null
+        )
+      );
+    }
+    publish.disabled = !questions || tooBig || missing.length > 0 || invalid.length > 0 || tooMany || tooHeavy;
+    return undefined;
   }
 
   gift.addEventListener("input", update);
@@ -339,6 +423,7 @@ function renderCreate(box, { onPublished, onUnauthorized }) {
     h("h2", {}, "Crear examen"),
     h("label", { class: "field" }, h("span", {}, "Archivo GIFT"), file, h("small", { class: "hint" }, "El archivo no se guarda en ningún sitio: solo se envían las preguntas a tu hoja de Google.")),
     h("label", { class: "field" }, h("span", {}, "…o pega el texto GIFT"), gift),
+    imagesBox,
     preview,
     h("h2", {}, "Ajustes"),
     h("label", { class: "field" }, h("span", {}, "Título"), titulo),
@@ -367,9 +452,23 @@ function renderCreate(box, { onPublished, onUnauthorized }) {
     } catch (e) {
       return msg.append(notice("error", e.message));
     }
+    // Imágenes citadas en las preguntas, con el nombre tal como aparece en el enunciado.
+    const imagenes = imageRefs.names.map((n) => {
+      const img = matchImage(n, [...provided.values()]);
+      return { nombre: n, mime: img.mime, data: img.data };
+    });
     publish.disabled = true;
     publish.textContent = "Publicando…";
     try {
+      if (imagenes.length) {
+        // Un Code.gs anterior ignoraría las imágenes y el examen saldría roto: se comprueba antes de publicar.
+        const v = await apiGet({ action: "version" });
+        if (!v.ok || !Array.isArray(v.funciones) || !v.funciones.includes("imagenes")) {
+          msg.append(notice("error", "El script de Google no está actualizado y no sabe guardar imágenes. Actualiza Code.gs en Apps Script (Nueva versión) y vuelve a publicar."));
+          publish.disabled = false;
+          return;
+        }
+      }
       const res = await apiPost({
         action: "createExam",
         token,
@@ -382,6 +481,7 @@ function renderCreate(box, { onPublished, onUnauthorized }) {
         mostrar_nota: mostrar.input.checked,
         permitir_negativa: negativa.input.checked,
         penalizacion,
+        imagenes,
         control_salidas: vigilar.input.checked,
         pantalla_completa: vigilar.input.checked && pantallaCompleta.input.checked,
         salidas_permitidas: salidasInput.value === "" ? 3 : Math.max(0, Math.min(20, Math.floor(Number(salidasInput.value)) || 0)),

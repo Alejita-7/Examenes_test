@@ -65,10 +65,22 @@ export function makeEnv(token = "secreto", { uuid: uuidFn } = {}) {
   };
   const props = token ? { ADMIN_TOKEN: token } : {};
   let uuid = 0;
+  const cache = new Map();
   const ctx = vm.createContext({
     console,
     SpreadsheetApp: { getActiveSpreadsheet: () => ss },
     PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => props[k] ?? null }) },
+    CacheService: {
+      getScriptCache: () => {
+        const m = cache;
+        return {
+          get: (k) => m.get(k) ?? null,
+          put: (k, v) => { if (String(v).length > 100000) throw new Error("Argument too large: value"); m.set(k, v); },
+          getAll: (ks) => Object.fromEntries(ks.filter((k) => m.has(k)).map((k) => [k, m.get(k)])),
+          putAll: (o) => { for (const [k, v] of Object.entries(o)) { if (String(v).length > 100000) throw new Error("Argument too large: value"); m.set(k, v); } },
+        };
+      },
+    },
     LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
     Utilities: { getUuid: uuidFn ?? (() => `${String(++uuid).padStart(8, "0")}-aaaa-bbbb-cccc-dddddddddddd`) },
     ContentService: {
@@ -80,6 +92,7 @@ export function makeEnv(token = "secreto", { uuid: uuidFn } = {}) {
   const run = (code) => vm.runInContext(code, ctx);
   return {
     sheets,
+    cache,
     get: (params) => run(`handleGet_`)(params),
     post: (body) => run(`handlePost_`)(body),
     fn: (name) => run(name),

@@ -69,6 +69,15 @@ Otros casos rápidos (cada uno es un envío más, con otro nombre):
 - [ ] Envía tres exámenes con alumnos de prueba, por ejemplo «Marta Zapata», «Pedro Álvarez» y «Luis Benítez». En `R_<id>`, las filas aparecen **ordenadas por apellidos**: Álvarez, Benítez, Zapata (las tildes no alteran el orden), con las columnas `apellidos` y `nombre` separadas.
 - [ ] Dos alumnos con los mismos apellidos quedan ordenados por nombre.
 
+## 3d. Imágenes en las preguntas
+
+- [ ] Añade al GIFT una pregunta con `![descripción](figura1.png)` y otra con otra imagen. Al cargarlo, el panel lista «Imágenes de las preguntas» con «falta» en cada una y **no deja publicar**.
+- [ ] Selecciona tus PNG: aparecen con su miniatura, tamaño reducido y KB; una foto pesada queda en unos 150 KB. La vista previa muestra las imágenes.
+- [ ] Publica. En la hoja aparece la pestaña `Imagenes` con filas troceadas.
+- [ ] Como alumno, en el móvil y en el iPad, las imágenes se ven **dentro del ancho de la pantalla**, nítidas, y no se pueden arrastrar ni seleccionar.
+- [ ] Con un examen con código de acceso, las imágenes solo llegan tras acertar el código.
+- [ ] Con 30 móviles abriendo el examen a la vez, todos cargan (la primera lectura llena una caché de 6 horas).
+
 ## 4. Duplicados, cierre y límites
 
 - [ ] Repites el envío con el mismo nombre y grupo, cambiando tildes o mayúsculas (por ejemplo «MARTA RUIZ» en vez de «Marta Ruiz»): la fila nueva sale con `posible_duplicado` = TRUE y no se bloquea.

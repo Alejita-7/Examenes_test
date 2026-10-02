@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { makeEnv } from "./fake-gas.js";
-import { gradeExam } from "../js/grading.js";
+import { gradeExam, parsePenalty } from "../js/grading.js";
 import { parseGift } from "../js/gift.js";
 
 const GIFT = `::P1::Uno{=a~b~c~d}\n\n::P2::Dos{~a=b~c~d}\n\n::P3::Tres{~a~b=c~d}`;
@@ -36,6 +36,13 @@ test("gradeExam_ de Code.gs coincide con js/grading.js en 2000 casos aleatorios"
     assert.deepEqual(
       JSON.parse(JSON.stringify(gradeServer(qs, ans, { allowNegative }))),
       gradeExam(qs, ans, { allowNegative })
+    );
+    // con penalización propia (fracción a/b)
+    const den = 1 + Math.floor(rnd() * 9);
+    const penalty = { num: Math.floor(rnd() * (den + 1)), den };
+    assert.deepEqual(
+      JSON.parse(JSON.stringify(gradeServer(qs, ans, { allowNegative, penalty }))),
+      gradeExam(qs, ans, { allowNegative, penalty })
     );
   }
 });
@@ -270,4 +277,67 @@ test("motivos_salida se guarda saneado y se completa en el reenvío del mismo en
   env.post({ ...base, motivos_salida: "reduced,bhidden,blurred" });
   assert.equal(env.sheets.get(`R_${id}`).rows.length, 2, "una sola fila");
   assert.equal(env.sheets.get(`R_${id}`).rows[1][14], "reduced,bhidden,blurred");
+});
+
+/* ------------------------- penalización por examen ------------------------- */
+
+test("penalizacion: se guarda como texto (Sheets la convertiría en fecha), reducida y expuesta", () => {
+  const env = makeEnv();
+  const id = publish(env, { penalizacion: " 2 / 6 " });
+  const row = env.sheets.get("Examenes").rows[1];
+  assert.equal(row[14], "1/3", "guardada reducida y como texto, no como fecha");
+  assert.equal(env.get({ action: "exam", id }).exam.penalizacion, "1/3");
+  assert.equal(env.get({ action: "list", token: "secreto" }).exams[0].penalizacion, "1/3");
+});
+
+test("penalizacion: vacía = automática; 0 y 1 válidos; lo no válido se rechaza", () => {
+  const env = makeEnv();
+  const pen = (v) => env.get({ action: "exam", id: publish(env, v === undefined ? {} : { penalizacion: v }) }).exam.penalizacion;
+  assert.equal(pen(undefined), "");
+  assert.equal(pen(""), "");
+  assert.equal(pen("0"), "0");
+  assert.equal(pen("1"), "1");
+  assert.equal(pen("1/4"), "1/4");
+  const base = { action: "createExam", token: "secreto", ...settings, preguntas: parseGift(GIFT) };
+  for (const bad of ["0.25", "1,5", "3/2", "-1/3", "1/0", "abc"]) {
+    assert.equal(env.post({ ...base, penalizacion: bad }).error, "invalid_exam", bad);
+  }
+});
+
+test("penalizacion llega en info antes de pedir el código", () => {
+  const env = makeEnv();
+  const id = publish(env, { penalizacion: "1/5", codigo_acceso: "Luz42" });
+  assert.equal(env.get({ action: "exam", id }).info.penalizacion, "1/5");
+});
+
+test("el servidor corrige con la penalización de cada examen", () => {
+  // 3 preguntas de 4 opciones: q1 correcta (a), q2 incorrecta, q3 en blanco
+  const resp = { q1: "a", q2: "a" };
+  const nota = (extra) => {
+    const env = makeEnv();
+    const id = publish(env, { permitir_negativa: true, ...extra });
+    return env.post({ action: "submit", examId: id, nombre: "A", grupo: "B", respuestas: resp }).nota;
+  };
+  assert.equal(nota({}), 2.22);                       // automática: (1 − 1/3) / 3 · 10
+  assert.equal(nota({ penalizacion: "1/3" }), 2.22);
+  assert.equal(nota({ penalizacion: "0" }), 3.33);    // (1 − 0) / 3 · 10
+  assert.equal(nota({ penalizacion: "1/2" }), 1.67);  // (1 − 1/2) / 3 · 10
+  assert.equal(nota({ penalizacion: "1" }), 0);       // (1 − 1) / 3 · 10
+});
+
+test("un examen anterior (sin la columna) o con una celda ilegible usa la automática", () => {
+  const env = makeEnv();
+  const id = publish(env, { penalizacion: "1/2" });
+  env.sheets.get("Examenes").rows[1].length = 14;           // fila anterior a la columna
+  assert.equal(env.get({ action: "exam", id }).exam.penalizacion, "");
+  env.sheets.get("Examenes").rows[1][14] = new Date();      // Sheets la convirtió en fecha
+  assert.equal(env.get({ action: "exam", id }).exam.penalizacion, "");
+});
+
+test("createExam devuelve la penalización guardada (el panel la usa para detectar un script antiguo)", () => {
+  const env = makeEnv();
+  const r = env.post({ action: "createExam", token: "secreto", ...settings, preguntas: parseGift(GIFT), penalizacion: "2/6" });
+  assert.equal(r.penalizacion, "1/3");
+  const auto = env.post({ action: "createExam", token: "secreto", ...settings, preguntas: parseGift(GIFT) });
+  assert.equal(auto.penalizacion, "");
 });

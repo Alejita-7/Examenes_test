@@ -56,6 +56,13 @@ Otros casos rápidos (cada uno es un envío más, con otro nombre):
 | 20 errores | 0 (se recorta; con «nota negativa» activada sería −3,33) |
 | 16 aciertos, 2 errores, 2 en blanco | 7,67 |
 
+## 3b. Penalización elegida
+
+- [ ] Publica un examen con **1/4** de penalización. En la pantalla inicial del alumno pone «Cada respuesta incorrecta resta 1/4 de punto».
+- [ ] Con 20 preguntas, 12 aciertos, 5 errores y 3 en blanco, la nota es **(12 − 5 × 1/4) / 20 × 10 = 5,38**. Comprueba que la hoja y el alumno ven ese valor.
+- [ ] Publica otro con **«Sin penalización»**: los errores no restan y la pantalla inicial dice «Las respuestas incorrectas no restan».
+- [ ] Publica otro con una fracción propia (por ejemplo 2/5) y comprueba la columna `penalizacion` de la pestaña `Examenes` (debe verse `2/5`, no una fecha).
+
 ## 4. Duplicados, cierre y límites
 
 - [ ] Repites el envío con el mismo nombre y grupo, cambiando tildes o mayúsculas (por ejemplo «MARTA RUIZ» en vez de «Marta Ruiz»): la fila nueva sale con `posible_duplicado` = TRUE y no se bloquea.

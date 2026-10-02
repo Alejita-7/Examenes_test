@@ -5,6 +5,7 @@ import { h } from "./dom.js";
 import { isReducedWindow } from "./presence.js";
 import { createWatcher } from "./watch.js";
 import { normalize, seededShuffle, formatClock, penaltyFraction, formatNumber, newSendId } from "./util.js";
+import { parsePenalty } from "./grading.js";
 
 const MAX_TEXT = 60;
 const RETRY_DELAYS = [2000, 4000, 8000];
@@ -88,17 +89,29 @@ function showMessage(title, text, kind = "info") {
 const EXIT_RULE =
   "No puedes salir de la pantalla del examen: no cambies de pestaña, de ventana ni de aplicación, ni uses otra web al mismo tiempo. El examen se abre a pantalla completa y solo se muestra así: si reduces la ventana, cambias de aplicación o sales de la pantalla completa, el examen se oculta hasta que vuelvas. Cada salida queda registrada con el tiempo que estés fuera y, si continúas saliendo, el examen se enviará automáticamente tal como esté.";
 
-function scoringText(questions) {
+// `penalizacion`: fracción elegida por el profesor ("1/4", "0"...) o vacía = automática (1/(opciones-1)).
+function scoringText(questions, penalizacion) {
+  let custom = null;
+  try {
+    custom = parsePenalty(penalizacion);
+  } catch {
+    custom = null;
+  }
   const ks = new Set((questions ?? []).map((q) => q.options.length));
-  const penalty =
-    ks.size === 1
-      ? `${penaltyFraction([...ks][0])} de punto`
-      : "una fracción de punto (1/3 si la pregunta tiene 4 opciones)";
+  let penalty; // texto de lo que resta cada error, o null si no resta nada
+  if (custom) {
+    penalty = custom.num === 0 ? null : custom.den === 1 ? `${custom.num} punto` : `${custom.num}/${custom.den} de punto`;
+  } else {
+    penalty =
+      ks.size === 1
+        ? `${penaltyFraction([...ks][0])} de punto`
+        : "una fracción de punto (1/3 si la pregunta tiene 4 opciones)";
+  }
   return [
     "Cada respuesta correcta suma 1 punto.",
-    `Cada respuesta incorrecta resta ${penalty}.`,
+    penalty ? `Cada respuesta incorrecta resta ${penalty}.` : "Las respuestas incorrectas no restan.",
     "Las preguntas en blanco ni suman ni restan.",
-    "Si no estás seguro, puedes dejarla en blanco.",
+    ...(penalty ? ["Si no estás seguro, puedes dejarla en blanco."] : []),
   ];
 }
 
@@ -184,7 +197,7 @@ function showStart(info, exam) {
         "div",
         { class: "notice info" },
         h("p", {}, h("strong", {}, "Cómo se puntúa")),
-        scoringText(exam?.questions).map((t) => h("p", {}, t))
+        scoringText(exam?.questions, exam?.penalizacion ?? info.penalizacion).map((t) => h("p", {}, t))
       ),
       info.control_salidas
         ? h(
@@ -668,6 +681,7 @@ async function main() {
           requiere_codigo: false,
           control_salidas: res.exam.control_salidas,
           salidas_permitidas: res.exam.salidas_permitidas,
+          penalizacion: res.exam.penalizacion,
         },
         res.exam
       );

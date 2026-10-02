@@ -2,7 +2,8 @@
 import { apiGet, apiPost, NetworkError, ConfigError } from "./api.js";
 import { parseGift, GiftError } from "./gift.js";
 import { h } from "./dom.js";
-import { studentLink, randomCode } from "./util.js";
+import { studentLink, randomCode, formatNumber } from "./util.js";
+import { parsePenalty } from "./grading.js";
 
 const TOKEN_KEY = "admin_token";
 const WARN_CHARS = 45000;
@@ -219,6 +220,49 @@ function renderCreate(box, { onPublished, onUnauthorized }) {
     const input = h("input", { type: "checkbox", checked });
     return { input, node: h("label", { class: "check" }, input, label) };
   };
+  // Penalización por cada error, siempre como fracción de punto.
+  const penaltySelect = h(
+    "select",
+    { name: "penalizacion" },
+    h("option", { value: "auto" }, "Automática: 1/(opciones − 1), es decir, 1/3 con 4 opciones"),
+    h("option", { value: "0" }, "Sin penalización (los errores no restan)"),
+    h("option", { value: "1/2" }, "1/2 de punto por error"),
+    h("option", { value: "1/3" }, "1/3 de punto por error"),
+    h("option", { value: "1/4" }, "1/4 de punto por error"),
+    h("option", { value: "1/5" }, "1/5 de punto por error"),
+    h("option", { value: "otra" }, "Otra fracción…")
+  );
+  const numInput = h("input", { type: "number", min: 0, max: 99, step: 1, value: 1, inputmode: "numeric", "aria-label": "Numerador" });
+  const denInput = h("input", { type: "number", min: 1, max: 99, step: 1, value: 3, inputmode: "numeric", "aria-label": "Denominador" });
+  const customRow = h("div", { class: "fraction-row", hidden: true }, numInput, h("span", { class: "fraction-bar" }, "/"), denInput, h("span", { class: "muted" }, "de punto por error"));
+  const penaltyExample = h("small", { class: "hint" });
+  // Valor elegido: "" = automática, o "a/b" reducida; lanza un error si la fracción no es válida.
+  function chosenPenalty() {
+    if (penaltySelect.value === "auto") return "";
+    const text = penaltySelect.value === "otra" ? `${numInput.value}/${denInput.value}` : penaltySelect.value;
+    const p = parsePenalty(text);
+    return p.den === 1 ? String(p.num) : `${p.num}/${p.den}`;
+  }
+  function refreshPenalty() {
+    customRow.hidden = penaltySelect.value !== "otra";
+    let text;
+    try {
+      const f = chosenPenalty();
+      const p = f === "" ? { num: 1, den: 3 } : parsePenalty(f);
+      // Ejemplo: 20 preguntas, 12 aciertos, 5 errores y 3 en blanco (con la automática, supone 4 opciones).
+      const nota = ((12 - (5 * p.num) / p.den) / 20) * 10;
+      text = `Cada acierto suma 1 punto y cada error resta ${f === "" ? "1/(opciones − 1)" : f === "0" ? "nada" : f} de punto. Ejemplo: 12 aciertos, 5 errores y 3 en blanco de 20 preguntas → ${formatNumber(Math.max(0, nota))}.`;
+      penaltyExample.className = "hint";
+    } catch (e) {
+      text = e.message;
+      penaltyExample.className = "err";
+    }
+    penaltyExample.textContent = text;
+  }
+  penaltySelect.addEventListener("change", refreshPenalty);
+  numInput.addEventListener("input", refreshPenalty);
+  denInput.addEventListener("input", refreshPenalty);
+  refreshPenalty();
   const barPreg = check("Barajar el orden de las preguntas", true);
   const barOpc = check("Barajar el orden de las opciones", true);
   const mostrar = check("Mostrar la nota al alumno al terminar", true);
@@ -295,6 +339,7 @@ function renderCreate(box, { onPublished, onUnauthorized }) {
     h("label", { class: "field" }, h("span", {}, "Título"), titulo),
     h("div", { class: "row2" }, h("label", { class: "field" }, h("span", {}, "Grupo (opcional)"), grupo), h("label", { class: "field" }, h("span", {}, "Tiempo en minutos (0 = sin límite)"), tiempo)),
     h("label", { class: "field" }, h("span", {}, "Código de acceso (opcional)"), codigo, h("div", { style: "margin-top:6px" }, genCode)),
+    h("label", { class: "field" }, h("span", {}, "Penalización por cada error"), penaltySelect, customRow, penaltyExample),
     barPreg.node,
     barOpc.node,
     mostrar.node,
@@ -310,6 +355,12 @@ function renderCreate(box, { onPublished, onUnauthorized }) {
     msg.replaceChildren();
     if (!questions) return msg.append(notice("error", "Primero carga un examen GIFT válido."));
     if (!titulo.value.trim()) return msg.append(notice("error", "Escribe un título."));
+    let penalizacion;
+    try {
+      penalizacion = chosenPenalty();
+    } catch (e) {
+      return msg.append(notice("error", e.message));
+    }
     publish.disabled = true;
     publish.textContent = "Publicando…";
     try {
@@ -324,6 +375,7 @@ function renderCreate(box, { onPublished, onUnauthorized }) {
         barajar_opciones: barOpc.input.checked,
         mostrar_nota: mostrar.input.checked,
         permitir_negativa: negativa.input.checked,
+        penalizacion,
         control_salidas: vigilar.input.checked,
         salidas_permitidas: salidasInput.value === "" ? 3 : Math.max(0, Math.min(20, Math.floor(Number(salidasInput.value)) || 0)),
         preguntas: questions,
@@ -333,6 +385,10 @@ function renderCreate(box, { onPublished, onUnauthorized }) {
         msg.append(notice("error", res.message || "No se ha podido publicar."));
         publish.disabled = false;
         return;
+      }
+      // Un Code.gs anterior ignora la penalización elegida y corrige con la automática: se avisa.
+      if (penalizacion !== "" && res.penalizacion === undefined) {
+        res.warning = [res.warning, "El script de Google no está actualizado y no conoce la penalización elegida: este examen se corregirá con la automática. Actualiza Code.gs en Apps Script (Nueva versión) y vuelve a publicar el examen."].filter(Boolean).join(" ");
       }
       showPublished(box, res, titulo.value.trim(), codigo.value.trim(), () => renderCreate(box, { onPublished, onUnauthorized }));
       onPublished();

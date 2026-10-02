@@ -13,7 +13,7 @@ const SHEET_EXAMS = 'Examenes';
 const EXAM_HEADERS = [
   'id', 'titulo', 'grupo_destino', 'activo', 'codigo_acceso', 'tiempo_min',
   'barajar_preguntas', 'barajar_opciones', 'mostrar_nota', 'permitir_negativa',
-  'preguntas_json', 'creado', 'control_salidas', 'salidas_permitidas'
+  'preguntas_json', 'creado', 'control_salidas', 'salidas_permitidas', 'penalizacion'
 ];
 const RESULT_HEADERS = [
   'fecha', 'nombre', 'grupo', 'aciertos', 'errores', 'blancos', 'nota',
@@ -100,7 +100,8 @@ function getExam_(params) {
     tiempo_min: exam.tiempo_min,
     requiere_codigo: exam.codigo_acceso !== '',
     control_salidas: exam.control_salidas,
-    salidas_permitidas: exam.salidas_permitidas
+    salidas_permitidas: exam.salidas_permitidas,
+    penalizacion: exam.penalizacion
   };
 
   var codeCheck = checkCode_(exam, params.code);
@@ -124,6 +125,7 @@ function getExam_(params) {
       mostrar_nota: exam.mostrar_nota,
       control_salidas: exam.control_salidas,
       salidas_permitidas: exam.salidas_permitidas,
+      penalizacion: exam.penalizacion,
       questions: questions.map(function (q) {
         return {
           id: q.id,
@@ -169,7 +171,10 @@ function submit_(p) {
 
   var result;
   try {
-    result = gradeExam_(questions, answers, { allowNegative: exam.permitir_negativa });
+    result = gradeExam_(questions, answers, {
+      allowNegative: exam.permitir_negativa,
+      penalty: exam.penalizacion ? parsePenalty_(exam.penalizacion) : null
+    });
   } catch (err) {
     return fail_('invalid_answers', 'Las respuestas no corresponden a este examen.');
   }
@@ -254,6 +259,13 @@ function createExam_(p) {
       json.length + ' caracteres; máximo ' + MAX_CHARS + '). Divídelo en dos exámenes.');
   }
 
+  var penalizacion = '';
+  try {
+    penalizacion = formatPenalty_(parsePenalty_(p.penalizacion));
+  } catch (err) {
+    return fail_('invalid_exam', err.message);
+  }
+
   var tiempo = Math.floor(Number(p.tiempo_min));
   if (!isFinite(tiempo) || tiempo < 0) tiempo = 0;
 
@@ -280,14 +292,15 @@ function createExam_(p) {
       json,
       new Date(),
       toBool_(p.control_salidas),
-      allowedExits_(p.salidas_permitidas)
-    ], [1, 3, 5]);
+      allowedExits_(p.salidas_permitidas),
+      penalizacion
+    ], [1, 3, 5, 15]);
     getResultsSheet_(id);
   } finally {
     lock.releaseLock();
   }
 
-  var out = { ok: true, id: id, n_preguntas: questions.length, caracteres: json.length };
+  var out = { ok: true, id: id, n_preguntas: questions.length, caracteres: json.length, penalizacion: penalizacion };
   if (json.length > WARN_CHARS) {
     out.warning = 'El examen ocupa ' + json.length + ' de 50 000 caracteres: está cerca del límite de la celda.';
   }
@@ -322,6 +335,7 @@ function listExams_(params) {
       activo: ex.activo,
       control_salidas: ex.control_salidas,
       salidas_permitidas: ex.salidas_permitidas,
+      penalizacion: ex.penalizacion,
       codigo_acceso: ex.codigo_acceso,
       tiempo_min: ex.tiempo_min,
       n_preguntas: JSON.parse(ex.preguntas_json).length,
@@ -339,6 +353,7 @@ function listExams_(params) {
 
 function gradeExam_(questions, answers, opts) {
   var allowNegative = !!(opts && opts.allowNegative);
+  var penalty = (opts && opts.penalty) || null; // {num, den}: fracción de punto por error; null = 1/(opciones-1)
   if (!questions.length) throw new Error('El examen no tiene preguntas.');
 
   var aciertos = 0, errores = 0, blancos = 0, penalizacion = 0;
@@ -356,11 +371,12 @@ function gradeExam_(questions, answers, opts) {
       aciertos++;
     } else {
       errores++;
-      penalizacion += 1 / (q.options.length - 1);
+      if (!penalty) penalizacion += 1 / (q.options.length - 1);
     }
   });
 
-  var puntos = aciertos - penalizacion;
+  // Con penalización propia se calcula con enteros: (aciertos·den − errores·num) / den.
+  var puntos = penalty ? (aciertos * penalty.den - errores * penalty.num) / penalty.den : aciertos - penalizacion;
   var nota = (puntos / questions.length) * 10;
   if (!allowNegative && nota < 0) nota = 0;
   nota = Math.round((nota + Number.EPSILON * Math.sign(nota)) * 100) / 100;
@@ -411,6 +427,38 @@ function clampNumber_(v, max, decimals) {
   if (!isFinite(n) || n < 0) return 0;
   var f = Math.pow(10, decimals || 0);
   return Math.round(Math.min(n, max) * f) / f;
+}
+
+// Penalización por error como fracción de punto ("1/3", "0", "1"). Réplica de parsePenalty de js/grading.js.
+// Devuelve {num, den} reducida, o null si no se indica (penalización automática).
+function parsePenalty_(input) {
+  if (input === undefined || input === null) return null;
+  var text = String(input).trim();
+  if (text === '') return null;
+  var m = /^(\d{1,3})\s*(?:\/\s*(\d{1,3}))?$/.exec(text);
+  if (!m) throw new Error('La penalización debe ser una fracción, por ejemplo 1/3.');
+  var num = Number(m[1]);
+  var den = m[2] === undefined ? 1 : Number(m[2]);
+  if (den < 1) throw new Error('El denominador de la penalización debe ser al menos 1.');
+  if (num > den) throw new Error('La penalización no puede ser mayor que 1 punto (el numerador no puede superar al denominador).');
+  var a = num, b = den;
+  while (b !== 0) { var t = a % b; a = b; b = t; }
+  var g = a || 1;
+  return { num: num / g, den: den / g };
+}
+
+function formatPenalty_(p) {
+  if (!p) return '';
+  return p.den === 1 ? String(p.num) : p.num + '/' + p.den;
+}
+
+// Penalización guardada en la hoja: texto válido o '' (automática) si la celda está vacía o ilegible.
+function storedPenalty_(v) {
+  try {
+    return formatPenalty_(parsePenalty_(v));
+  } catch (err) {
+    return '';
+  }
 }
 
 // Salidas permitidas antes del envío automático: entero 0..20; 3 si no se indica.
@@ -550,7 +598,8 @@ function readExams_() {
       preguntas_json: String(r[10]),
       creado: r[11],
       control_salidas: toBool_(r[12]),
-      salidas_permitidas: allowedExits_(r[13])
+      salidas_permitidas: allowedExits_(r[13]),
+      penalizacion: storedPenalty_(r[14])
     });
   }
   return out;

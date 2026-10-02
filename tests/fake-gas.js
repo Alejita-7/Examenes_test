@@ -7,7 +7,7 @@ import vm from "node:vm";
 const coerce = (v) => {
   if (typeof v !== "string") return v;
   if (/^\d+(\.\d+)?(e\d+)?$/i.test(v)) return Number(v);
-  if (/^\d{1,2}-\d{1,2}$/.test(v)) return new Date(2000, 0, 1);
+  if (/^\d{1,2}[-/]\d{1,2}$/.test(v)) return new Date(2000, 0, 1);
   return v;
 };
 

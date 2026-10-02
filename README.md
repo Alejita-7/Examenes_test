@@ -148,9 +148,22 @@ Desde **Mis exámenes → Cerrar examen**. Los alumnos que abran el enlace verá
 
 ### Cómo se calcula la nota
 
-Para cada pregunta con *k* opciones: acierto **+1**, error **−1/(k−1)**, en blanco **0**.
+Cada acierto suma **1 punto**, cada pregunta en blanco **0** y cada error **resta una fracción de punto**.
 
-`nota = (aciertos − Σ penalizaciones) / nº de preguntas × 10`, redondeada a 2 decimales. Por defecto la nota mínima es 0 (se puede permitir negativa al publicar el examen).
+Al publicar el examen eliges la **penalización por cada error**, siempre como fracción:
+
+| Opción | Cada error resta |
+|---|---|
+| **Automática** (por defecto) | 1/(opciones − 1): 1/3 con 4 opciones, 1/2 con 3, 1/4 con 5 |
+| Sin penalización | 0 |
+| 1/2, 1/3, 1/4, 1/5 | esa fracción de punto, sea cual sea el número de opciones |
+| Otra fracción | cualquier `a/b` entre 0 y 1 (por ejemplo 2/5) |
+
+El panel muestra un ejemplo con la fracción elegida (12 aciertos, 5 errores y 3 en blanco de 20 preguntas), y el alumno ve en la pantalla inicial lo que resta cada error. La fracción se guarda reducida (2/6 pasa a 1/3).
+
+`nota = (aciertos − errores × penalización) / nº de preguntas × 10`, redondeada a 2 decimales. Por defecto la nota mínima es 0 (se puede permitir negativa al publicar el examen).
+
+Si actualizas desde una versión anterior: los exámenes ya publicados siguen con la penalización automática. Para usar una penalización elegida, **actualiza `Code.gs` en Google** (Nueva versión); si publicas con un script antiguo, el panel te avisa de que la penalización elegida no se aplicará.
 
 ---
 

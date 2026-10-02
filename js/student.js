@@ -86,8 +86,15 @@ function showMessage(title, text, kind = "info") {
 }
 
 // Norma de salidas para el alumno. No menciona cuántas salidas se toleran.
-const EXIT_RULE =
-  "No puedes salir de la pantalla del examen: no cambies de pestaña, de ventana ni de aplicación, ni uses otra web al mismo tiempo. El examen se abre a pantalla completa y solo se muestra así: si reduces la ventana, cambias de aplicación o sales de la pantalla completa, el examen se oculta hasta que vuelvas. Cada salida queda registrada con el tiempo que estés fuera y, si continúas saliendo, el examen se enviará automáticamente tal como esté.";
+function exitRule(fullscreen) {
+  return (
+    "No puedes salir de la pantalla del examen: no cambies de pestaña, de ventana ni de aplicación, ni uses otra web al mismo tiempo. " +
+    (fullscreen
+      ? "El examen se abre a pantalla completa y solo se muestra así: si reduces la ventana, cambias de aplicación o sales de la pantalla completa, el examen se oculta hasta que vuelvas. "
+      : "El examen debe ocupar toda la pantalla, sin pantalla dividida: si reduces la ventana o cambias de aplicación, el examen se oculta hasta que vuelvas. ") +
+    "Cada salida queda registrada con el tiempo que estés fuera y, si continúas saliendo, el examen se enviará automáticamente tal como esté."
+  );
+}
 
 // `penalizacion`: fracción elegida por el profesor ("1/4", "0"...) o vacía = automática (1/(opciones-1)).
 function scoringText(questions, penalizacion) {
@@ -165,7 +172,7 @@ function showStart(info, exam) {
     if (needsCode && !c) return fail("Escribe el código de acceso.");
 
     button.disabled = true;
-    if (info.control_salidas) enterFullscreen(); // dentro del gesto de pulsar «Empezar»
+    if (info.control_salidas && info.pantalla_completa) enterFullscreen(); // dentro del gesto de pulsar «Empezar»
     try {
       let loaded = exam;
       if (!loaded || needsCode) {
@@ -204,7 +211,7 @@ function showStart(info, exam) {
             "div",
             { class: "notice warn" },
             h("p", {}, h("strong", {}, "Examen vigilado")),
-            h("p", {}, EXIT_RULE),
+            h("p", {}, exitRule(info.pantalla_completa)),
             h("p", {}, "Copiar y pegar está desactivado durante el examen.")
           )
         : null,
@@ -259,6 +266,8 @@ function renderExam(session) {
   const limitSeconds = (Number(exam.tiempo_min) || 0) * 60;
   const watched = Boolean(exam.control_salidas);
   const allowed = Number.isFinite(Number(exam.salidas_permitidas)) ? Number(exam.salidas_permitidas) : 3;
+  // La pantalla completa solo se exige si el profesor lo ha marcado al publicar el examen.
+  const fsActive = Boolean(exam.pantalla_completa) && fsSupported;
   const overLimit = () => progress.salidas > allowed;
   let timerId = null;
   let sending = false;
@@ -486,16 +495,20 @@ function renderExam(session) {
 
   function applyCover(reason) {
     if (reason === "prepare") {
-      coverTitle.textContent = "Pon el examen a pantalla completa";
-      coverMain.firstChild.textContent = "Toca el botón (o cualquier parte de la pantalla) para empezar.";
+      coverTitle.textContent = fsActive ? "Pon el examen a pantalla completa" : "Pon el examen a toda la pantalla";
+      coverMain.firstChild.textContent = fsActive
+        ? "Toca el botón (o cualquier parte de la pantalla) para empezar."
+        : "Cierra la pantalla dividida o amplía la ventana del examen para empezar.";
       coverNote.textContent = "Esto todavía no cuenta como salida.";
     } else if (reason === "away") {
       coverTitle.textContent = "⚠ Examen oculto";
-      coverMain.firstChild.textContent = "Vuelve a la pantalla completa del examen para continuar.";
+      coverMain.firstChild.textContent = fsActive
+        ? "Vuelve a la pantalla completa del examen para continuar."
+        : "Vuelve a la ventana completa del examen para continuar.";
       coverNote.textContent = "Mientras estés fuera, el examen no se muestra y el tiempo que pasas fuera queda registrado.";
     }
     cover.hidden = !reason;
-    fsBtn.hidden = !(reason && fsSupported && !fsElement());
+    fsBtn.hidden = !(reason && fsActive && !fsElement());
     if (!sending) fieldset.disabled = Boolean(reason);
   }
 
@@ -536,7 +549,7 @@ function renderExam(session) {
   function collectInputs() {
     const settling = Date.now() < quietUntil;
     if (document.hasFocus()) focusSeen = true;
-    if (fsElement()) fullscreenSeen = true;
+    if (fsActive && fsElement()) fullscreenSeen = true;
     wasReduced = isReducedWindow({
       innerWidth: window.innerWidth,
       innerHeight: window.innerHeight,
@@ -551,8 +564,8 @@ function renderExam(session) {
       noFocus: focusSeen && !document.hasFocus(),
       pointerOut,
       reduced: wasReduced && !settling,
-      fullscreenLost: fullscreenSeen && !fsElement() && !settling,
-      needsFullscreen: fsSupported && !fsState.failed && !fsElement(),
+      fullscreenLost: fsActive && fullscreenSeen && !fsElement() && !settling,
+      needsFullscreen: fsActive && !fsState.failed && !fsElement(),
     };
   }
 
@@ -584,7 +597,7 @@ function renderExam(session) {
     document.addEventListener(
       "pointerdown",
       () => {
-        if (fsSupported && !fsElement() && !fsState.failed && (fullscreenSeen || !watcher.isArmed())) {
+        if (fsActive && !fsElement() && !fsState.failed && (fullscreenSeen || !watcher.isArmed())) {
           quietUntil = Date.now() + QUIET_MS;
           enterFullscreen();
         }
@@ -682,6 +695,7 @@ async function main() {
           control_salidas: res.exam.control_salidas,
           salidas_permitidas: res.exam.salidas_permitidas,
           penalizacion: res.exam.penalizacion,
+          pantalla_completa: res.exam.pantalla_completa,
         },
         res.exam
       );

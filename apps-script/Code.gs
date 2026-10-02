@@ -13,7 +13,8 @@ const SHEET_EXAMS = 'Examenes';
 const EXAM_HEADERS = [
   'id', 'titulo', 'grupo_destino', 'activo', 'codigo_acceso', 'tiempo_min',
   'barajar_preguntas', 'barajar_opciones', 'mostrar_nota', 'permitir_negativa',
-  'preguntas_json', 'creado', 'control_salidas', 'salidas_permitidas', 'penalizacion'
+  'preguntas_json', 'creado', 'control_salidas', 'salidas_permitidas', 'penalizacion',
+  'pantalla_completa'
 ];
 const RESULT_HEADERS = [
   'fecha', 'nombre', 'grupo', 'aciertos', 'errores', 'blancos', 'nota',
@@ -101,7 +102,8 @@ function getExam_(params) {
     requiere_codigo: exam.codigo_acceso !== '',
     control_salidas: exam.control_salidas,
     salidas_permitidas: exam.salidas_permitidas,
-    penalizacion: exam.penalizacion
+    penalizacion: exam.penalizacion,
+    pantalla_completa: exam.pantalla_completa
   };
 
   var codeCheck = checkCode_(exam, params.code);
@@ -126,6 +128,7 @@ function getExam_(params) {
       control_salidas: exam.control_salidas,
       salidas_permitidas: exam.salidas_permitidas,
       penalizacion: exam.penalizacion,
+      pantalla_completa: exam.pantalla_completa,
       questions: questions.map(function (q) {
         return {
           id: q.id,
@@ -293,14 +296,16 @@ function createExam_(p) {
       new Date(),
       toBool_(p.control_salidas),
       allowedExits_(p.salidas_permitidas),
-      penalizacion
+      penalizacion,
+      toBool_(p.pantalla_completa)
     ], [1, 3, 5, 15]);
     getResultsSheet_(id);
   } finally {
     lock.releaseLock();
   }
 
-  var out = { ok: true, id: id, n_preguntas: questions.length, caracteres: json.length, penalizacion: penalizacion };
+  var out = { ok: true, id: id, n_preguntas: questions.length, caracteres: json.length, penalizacion: penalizacion,
+    pantalla_completa: toBool_(p.pantalla_completa) };
   if (json.length > WARN_CHARS) {
     out.warning = 'El examen ocupa ' + json.length + ' de 50 000 caracteres: está cerca del límite de la celda.';
   }
@@ -336,6 +341,7 @@ function listExams_(params) {
       control_salidas: ex.control_salidas,
       salidas_permitidas: ex.salidas_permitidas,
       penalizacion: ex.penalizacion,
+      pantalla_completa: ex.pantalla_completa,
       codigo_acceso: ex.codigo_acceso,
       tiempo_min: ex.tiempo_min,
       n_preguntas: JSON.parse(ex.preguntas_json).length,
@@ -599,7 +605,8 @@ function readExams_() {
       creado: r[11],
       control_salidas: toBool_(r[12]),
       salidas_permitidas: allowedExits_(r[13]),
-      penalizacion: storedPenalty_(r[14])
+      penalizacion: storedPenalty_(r[14]),
+      pantalla_completa: toBool_(r[15])
     });
   }
   return out;

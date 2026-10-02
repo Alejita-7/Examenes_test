@@ -5,6 +5,8 @@ import { makeEnv } from "./fake-gas.js";
 import { gradeExam, parsePenalty } from "../js/grading.js";
 import { parseGift } from "../js/gift.js";
 
+// Valor de una celda por el nombre de su columna: los tests no dependen del orden de las columnas.
+const cell = (rows, rowIndex, name) => rows[rowIndex][rows[0].indexOf(name)];
 const GIFT = `::P1::Uno{=a~b~c~d}\n\n::P2::Dos{~a=b~c~d}\n\n::P3::Tres{~a~b=c~d}`;
 const settings = { titulo: "Test", grupo_destino: "2A", tiempo_min: 20, mostrar_nota: true };
 
@@ -62,14 +64,14 @@ test("flujo completo: crear, consultar sin soluciones, enviar, listar, cerrar", 
   });
   assert.deepEqual({ ...sub }, { ok: true, nota: 2.22, aciertos: 1, errores: 1, blancos: 1 }); // (1-1/3)/3*10
 
-  const row = env.sheets.get(`R_${id}`).rows[1];
-  assert.equal(row[1], "Ana López");
-  assert.equal(row[8], false);
+  const rows1 = env.sheets.get(`R_${id}`).rows;
+  assert.equal(cell(rows1, 1, "nombre"), "Ana López");
+  assert.equal(cell(rows1, 1, "posible_duplicado"), false);
 
   // mismo alumno con tildes/mayúsculas distintas -> duplicado, pero no se bloquea
   const again = env.post({ action: "submit", examId: id, nombre: "ANA LOPEZ", grupo: "2º  a", respuestas: {} });
   assert.equal(again.ok, true);
-  assert.equal(env.sheets.get(`R_${id}`).rows[2][8], true);
+  assert.equal(cell(env.sheets.get(`R_${id}`).rows, 2, "posible_duplicado"), true);
 
   const list = env.get({ action: "list", token: "secreto" });
   assert.equal(list.exams[0].envios, 2);
@@ -160,7 +162,7 @@ test("regresión: un id con forma de notación científica no se convierte en n�
   const list = env.get({ action: "list", token: "secreto" }).exams[0];
   assert.equal(list.id, id);
   assert.equal(list.envios, 1, "la hoja R_ de resultados es la misma que la del examen");
-  assert.equal(env.sheets.get(`R_${id}`).rows[1][2], "1-2", "el grupo no se convierte en fecha");
+  assert.equal(cell(env.sheets.get(`R_${id}`).rows, 1, "grupo"), "1-2", "el grupo no se convierte en fecha");
 });
 
 test("regresión: un código de acceso con forma numérica se compara bien", () => {
@@ -208,15 +210,16 @@ test("el envío registra salidas, segundos fuera y tipo de envío", () => {
   });
   assert.equal(r.ok, true);
   const rows = env.sheets.get(`R_${id}`).rows;
-  assert.deepEqual(plain(rows[0].slice(10)), ["salidas", "segundos_fuera", "tipo_envio", "envio_id", "motivos_salida"]);
-  assert.deepEqual(plain(rows[1].slice(10)), [1, 12.3, "salida", "abc-1", ""]);
+  const get = (name) => cell(rows, 1, name);
+  assert.deepEqual([get("salidas"), get("segundos_fuera"), get("tipo_envio"), get("envio_id"), get("motivos_salida")], [1, 12.3, "salida", "abc-1", ""]);
 });
 
 test("valores de vigilancia saneados (tipo desconocido, negativos, texto)", () => {
   const env = makeEnv();
   const id = publish(env);
   env.post({ action: "submit", examId: id, nombre: "A", grupo: "B", respuestas: {}, salidas: -5, segundos_fuera: "x", envio: "hack", envioId: 7 });
-  assert.deepEqual(plain(env.sheets.get(`R_${id}`).rows[1].slice(10)), [0, 0, "manual", "", ""]);
+  const rowsV = env.sheets.get(`R_${id}`).rows;
+  assert.deepEqual(["salidas", "segundos_fuera", "tipo_envio", "envio_id", "motivos_salida"].map((n) => cell(rowsV, 1, n)), [0, 0, "manual", "", ""]);
 });
 
 test("el mismo envioId no crea una segunda fila y completa los segundos fuera", () => {
@@ -229,20 +232,24 @@ test("el mismo envioId no crea una segunda fila y completa los segundos fuera", 
   assert.equal(second.nota, first.nota);
   const rows = env.sheets.get(`R_${id}`).rows;
   assert.equal(rows.length, 2, "una sola fila de datos");
-  assert.deepEqual(plain(rows[1].slice(10, 12)), [1, 45]);
-  assert.equal(rows[1][8], false, "no se marca como duplicado de sí mismo");
+  assert.deepEqual([cell(rows, 1, "salidas"), cell(rows, 1, "segundos_fuera")], [1, 45]);
+  assert.equal(cell(rows, 1, "posible_duplicado"), false, "no se marca como duplicado de sí mismo");
   // otro alumno con otro envioId sí es una fila nueva
   env.post({ ...base, envioId: "dos", nombre: "Luis" });
   assert.equal(env.sheets.get(`R_${id}`).rows.length, 3);
 });
 
-test("hojas de resultados antiguas reciben las columnas nuevas", () => {
+test("hojas de resultados antiguas reciben las columnas nuevas por nombre", () => {
   const env = makeEnv();
   const id = publish(env);
   const sheet = env.sheets.get(`R_${id}`);
-  sheet.rows[0].length = 10; // cabecera de la versión anterior
-  env.post({ action: "submit", examId: id, nombre: "A", grupo: "B", respuestas: {}, envioId: "x1" });
-  assert.deepEqual(plain(sheet.rows[0].slice(10)), ["salidas", "segundos_fuera", "tipo_envio", "envio_id", "motivos_salida"]);
+  // cabecera de la primera versión: sin apellidos ni columnas de vigilancia
+  sheet.rows = [["fecha", "nombre", "grupo", "aciertos", "errores", "blancos", "nota", "duracion_min", "posible_duplicado", "respuestas_json"]];
+  assert.equal(env.post({ action: "submit", examId: id, nombre: "Ana", apellidos: "López", grupo: "B", respuestas: {}, envioId: "x1" }).ok, true);
+  const h = sheet.rows[0];
+  assert.deepEqual(plain(h.slice(10)), ["salidas", "segundos_fuera", "tipo_envio", "envio_id", "motivos_salida"]);
+  assert.ok(!h.includes("apellidos"), "no se inserta una columna en medio de una hoja ya en uso");
+  assert.equal(cell(sheet.rows, 1, "nombre"), "López, Ana", "en hojas anteriores el nombre se guarda como Apellidos, Nombre");
 });
 
 test("salidas_permitidas: se guarda, se limita a 0..20 y vale 3 por defecto", () => {
@@ -273,10 +280,10 @@ test("motivos_salida se guarda saneado y se completa en el reenvío del mismo en
   const id = publish(env, { control_salidas: true });
   const base = { action: "submit", examId: id, nombre: "Ana", grupo: "2A", respuestas: {}, envioId: "m1", salidas: 2 };
   env.post({ ...base, motivos_salida: "reduced,<b>hidden</b>" });
-  assert.equal(env.sheets.get(`R_${id}`).rows[1][14], "reduced,bhiddenb");
+  assert.equal(cell(env.sheets.get(`R_${id}`).rows, 1, "motivos_salida"), "reduced,bhiddenb");
   env.post({ ...base, motivos_salida: "reduced,bhidden,blurred" });
   assert.equal(env.sheets.get(`R_${id}`).rows.length, 2, "una sola fila");
-  assert.equal(env.sheets.get(`R_${id}`).rows[1][14], "reduced,bhidden,blurred");
+  assert.equal(cell(env.sheets.get(`R_${id}`).rows, 1, "motivos_salida"), "reduced,bhidden,blurred");
 });
 
 /* ------------------------- penalización por examen ------------------------- */
@@ -367,4 +374,96 @@ test("pantalla_completa llega en info antes de pedir el código; un examen anter
   assert.equal(env.get({ action: "exam", id }).info.pantalla_completa, true);
   env.sheets.get("Examenes").rows[1].length = 15; // fila anterior a la columna
   assert.equal(env.get({ action: "exam", id, code: "Luz42" }).exam.pantalla_completa, false);
+});
+
+/* ------------------------- nombre y apellidos, orden alfabético ------------------------- */
+
+const submitAs = (env, id, nombre, apellidos, extra = {}) =>
+  env.post({ action: "submit", examId: id, nombre, apellidos, grupo: "2A", respuestas: {}, ...extra });
+const names = (env, id) => {
+  const rows = env.sheets.get(`R_${id}`).rows;
+  return rows.slice(1).map((_, i) => `${cell(rows, i + 1, "apellidos")}, ${cell(rows, i + 1, "nombre")}`);
+};
+
+test("las hojas nuevas separan apellidos y nombre", () => {
+  const env = makeEnv();
+  const id = publish(env);
+  assert.equal(submitAs(env, id, "  Ana ", " López   Pérez ").ok, true);
+  const rows = env.sheets.get(`R_${id}`).rows;
+  assert.deepEqual(plain(rows[0].slice(0, 4)), ["fecha", "apellidos", "nombre", "grupo"]);
+  assert.equal(cell(rows, 1, "apellidos"), "López Pérez");
+  assert.equal(cell(rows, 1, "nombre"), "Ana");
+});
+
+test("los apellidos son obligatorios si se envía el campo y se limitan a 60 caracteres", () => {
+  const env = makeEnv();
+  const id = publish(env);
+  assert.equal(submitAs(env, id, "Ana", "").error, "invalid_surname");
+  assert.equal(submitAs(env, id, "Ana", "   ").error, "invalid_surname");
+  assert.equal(submitAs(env, id, "Ana", "x".repeat(61)).error, "invalid_surname");
+  assert.equal(submitAs(env, id, "", "López").error, "invalid_name");
+  assert.equal(env.sheets.get(`R_${id}`).rows.length, 1, "no se guarda nada si falla");
+});
+
+test("una página anterior (sin campo apellidos) sigue pudiendo enviar", () => {
+  const env = makeEnv();
+  const id = publish(env);
+  assert.equal(env.post({ action: "submit", examId: id, nombre: "Ana López", grupo: "2A", respuestas: {} }).ok, true);
+  const rows = env.sheets.get(`R_${id}`).rows;
+  assert.equal(cell(rows, 1, "nombre"), "Ana López");
+  assert.equal(cell(rows, 1, "apellidos"), "");
+});
+
+test("las filas quedan ordenadas por apellidos y, a igualdad, por nombre (sin distinguir tildes ni mayúsculas)", () => {
+  const env = makeEnv();
+  const id = publish(env);
+  submitAs(env, id, "Marta", "Zapata Ruiz");
+  submitAs(env, id, "Pedro", "Álvarez Gil");
+  submitAs(env, id, "Luis", "Benítez");
+  submitAs(env, id, "Ana", "álvarez gil");
+  submitAs(env, id, "Sara", "Alonso");
+  submitAs(env, id, "Eva", "Zapata Ruiz");
+  assert.deepEqual(names(env, id), [
+    "Alonso, Sara",
+    "álvarez gil, Ana",
+    "Álvarez Gil, Pedro",
+    "Benítez, Luis",
+    "Zapata Ruiz, Eva",
+    "Zapata Ruiz, Marta",
+  ]);
+});
+
+test("tras ordenar, el reenvío del mismo envío actualiza la fila correcta", () => {
+  const env = makeEnv();
+  const id = publish(env, { control_salidas: true });
+  submitAs(env, id, "Marta", "Zapata", { envioId: "m", salidas: 1, segundos_fuera: 0 });
+  submitAs(env, id, "Pedro", "Álvarez", { envioId: "p", salidas: 1, segundos_fuera: 0 });   // pasa por delante de Zapata
+  submitAs(env, id, "Marta", "Zapata", { envioId: "m", salidas: 1, segundos_fuera: 30 });   // reenvío de Marta
+  const rows = env.sheets.get(`R_${id}`).rows;
+  assert.equal(rows.length, 3);
+  assert.equal(cell(rows, 1, "segundos_fuera"), 0, "Álvarez, Pedro no cambia");
+  assert.equal(cell(rows, 2, "segundos_fuera"), 30, "Zapata, Marta sí");
+});
+
+test("posible_duplicado compara apellidos y nombre sin tildes, mayúsculas ni espacios", () => {
+  const env = makeEnv();
+  const id = publish(env);
+  submitAs(env, id, "María", "López Pérez");
+  submitAs(env, id, "MARIA", "  lopez   perez ");
+  submitAs(env, id, "Pedro", "López Pérez");
+  const rows = env.sheets.get(`R_${id}`).rows;
+  const dups = rows.slice(1).map((_, i) => cell(rows, i + 1, "posible_duplicado"));
+  assert.equal(dups.filter(Boolean).length, 1, "solo la segunda María es posible duplicado");
+});
+
+test("las hojas anteriores (sin apellidos) siguen funcionando y no se reordenan", () => {
+  const env = makeEnv();
+  const id = publish(env);
+  const sheet = env.sheets.get(`R_${id}`);
+  sheet.rows = [["fecha", "nombre", "grupo", "aciertos", "errores", "blancos", "nota", "duracion_min", "posible_duplicado", "respuestas_json", "salidas", "segundos_fuera", "tipo_envio", "envio_id", "motivos_salida"]];
+  submitAs(env, id, "Marta", "Zapata");
+  submitAs(env, id, "Pedro", "Álvarez");
+  const rows = sheet.rows;
+  assert.deepEqual([cell(rows, 1, "nombre"), cell(rows, 2, "nombre")], ["Zapata, Marta", "Álvarez, Pedro"], "orden de llegada");
+  assert.equal(rows[0].length, 15, "no se añaden columnas");
 });

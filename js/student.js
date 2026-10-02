@@ -49,7 +49,7 @@ const store = {
   },
 };
 
-const progressKey = (nombre, grupo) => `examen:${examId}:${normalize(nombre)}|${normalize(grupo)}`;
+const progressKey = (nombre, apellidos, grupo) => `examen:${examId}:${normalize(apellidos)}|${normalize(nombre)}|${normalize(grupo)}`;
 const lastKey = () => `examen:${examId}:ultimo`;
 
 function loadJson(key) {
@@ -128,26 +128,30 @@ function showStart(info, exam) {
   const needsCode = info.requiere_codigo;
   const form = h("form", { novalidate: true });
   const errBox = h("div", { class: "notice error", hidden: true, role: "alert" }, h("p"));
-  const nombre = h("input", { name: "nombre", maxlength: MAX_TEXT, autocomplete: "name", required: true });
+  const nombre = h("input", { name: "nombre", maxlength: MAX_TEXT, autocomplete: "given-name", required: true });
+  const apellidos = h("input", { name: "apellidos", maxlength: MAX_TEXT, autocomplete: "family-name", required: true });
   const grupo = h("input", { name: "grupo", maxlength: MAX_TEXT, required: true });
   const code = h("input", { name: "code", autocomplete: "off", autocapitalize: "off" });
   if (last) {
     nombre.value = last.nombre ?? "";
+    apellidos.value = last.apellidos ?? "";
     grupo.value = last.grupo ?? "";
     code.value = last.code ?? "";
   }
   const button = h("button", { class: "btn block", type: "submit" }, "Empezar el examen");
 
   const refreshButton = () => {
-    const has = nombre.value.trim() && grupo.value.trim() && store.get(progressKey(nombre.value, grupo.value));
+    const has = nombre.value.trim() && apellidos.value.trim() && grupo.value.trim() && store.get(progressKey(nombre.value, apellidos.value, grupo.value));
     button.textContent = has ? "Continuar el examen" : "Empezar el examen";
   };
   nombre.addEventListener("input", refreshButton);
+  apellidos.addEventListener("input", refreshButton);
   grupo.addEventListener("input", refreshButton);
 
   form.append(
     ...[
-    h("label", { class: "field" }, h("span", {}, "Nombre y apellidos"), nombre),
+    h("label", { class: "field" }, h("span", {}, "Nombre"), nombre),
+    h("label", { class: "field" }, h("span", {}, "Apellidos"), apellidos),
     h("label", { class: "field" }, h("span", {}, "Grupo"), grupo, h("small", { class: "hint" }, "Por ejemplo: 2º A")),
     needsCode
       ? h("label", { class: "field" }, h("span", {}, "Código de acceso"), code, h("small", { class: "hint" }, "Te lo da tu profesor."))
@@ -160,6 +164,7 @@ function showStart(info, exam) {
   form.addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const n = nombre.value.replace(/\s+/g, " ").trim();
+    const a = apellidos.value.replace(/\s+/g, " ").trim();
     const g = grupo.value.replace(/\s+/g, " ").trim();
     const c = code.value.trim();
     const fail = (msg) => {
@@ -167,8 +172,10 @@ function showStart(info, exam) {
       errBox.firstChild.textContent = msg;
     };
     errBox.hidden = true;
-    if (!n || !g) return fail("Escribe tu nombre y tu grupo.");
-    if (n.length > MAX_TEXT || g.length > MAX_TEXT) return fail(`El nombre y el grupo no pueden superar ${MAX_TEXT} caracteres.`);
+    if (!n) return fail("Escribe tu nombre.");
+    if (!a) return fail("Escribe tus apellidos.");
+    if (!g) return fail("Escribe tu grupo.");
+    if (n.length > MAX_TEXT || a.length > MAX_TEXT || g.length > MAX_TEXT) return fail(`El nombre, los apellidos y el grupo no pueden superar ${MAX_TEXT} caracteres.`);
     if (needsCode && !c) return fail("Escribe el código de acceso.");
 
     button.disabled = true;
@@ -180,7 +187,7 @@ function showStart(info, exam) {
         if (!res.ok) return fail(res.message || "No se ha podido abrir el examen.");
         loaded = res.exam;
       }
-      startExam(loaded, { nombre: n, grupo: g, code: c });
+      startExam(loaded, { nombre: n, apellidos: a, grupo: g, code: c });
     } catch (e) {
       fail(errorText(e));
     } finally {
@@ -230,10 +237,10 @@ function errorText(e) {
 /* ------------------------------- examen --------------------------------- */
 
 function startExam(exam, who) {
-  const key = progressKey(who.nombre, who.grupo);
+  const key = progressKey(who.nombre, who.apellidos, who.grupo);
   let progress = loadJson(key);
   if (!progress || typeof progress.answers !== "object" || !progress.startedAt) {
-    progress = { nombre: who.nombre, grupo: who.grupo, startedAt: Date.now(), answers: {} };
+    progress = { nombre: who.nombre, apellidos: who.apellidos, grupo: who.grupo, startedAt: Date.now(), answers: {} };
   }
   // Datos de envío y de vigilancia (también para progresos guardados por versiones anteriores).
   progress.envioId = progress.envioId || newSendId();
@@ -244,8 +251,8 @@ function startExam(exam, who) {
   store.set(key, JSON.stringify(progress));
   store.set(lastKey(), JSON.stringify(who));
 
-  // Orden fijo por alumno: la semilla depende del examen, el nombre y el grupo.
-  const seed = `${examId}|${normalize(who.nombre)}|${normalize(who.grupo)}`;
+  // Orden fijo por alumno: la semilla depende del examen, el nombre, los apellidos y el grupo.
+  const seed = `${examId}|${normalize(who.apellidos)}|${normalize(who.nombre)}|${normalize(who.grupo)}`;
   let questions = exam.questions.map((q) => ({ ...q }));
   if (exam.barajar_preguntas) questions = seededShuffle(questions, `${seed}|q`);
   if (exam.barajar_opciones) {
@@ -379,6 +386,7 @@ function renderExam(session) {
     return {
       examId,
       nombre: who.nombre,
+      apellidos: who.apellidos,
       grupo: who.grupo,
       code: who.code,
       respuestas,
@@ -613,7 +621,7 @@ function renderExam(session) {
     "div",
     { class: watched ? "exam-screen no-copy" : "exam-screen" },
     h("h1", {}, exam.titulo),
-    h("p", { class: "muted" }, `${who.nombre} · ${who.grupo}`),
+    h("p", { class: "muted" }, `${who.nombre} ${who.apellidos} · ${who.grupo}`),
     watched ? h("p", { class: "muted small" }, "Examen vigilado: no salgas de esta pantalla. Las salidas quedan registradas y, si continúas, el examen se envía automáticamente.") : null,
     bar,
     fieldset,

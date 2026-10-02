@@ -140,9 +140,13 @@ Si actualizas desde una versión anterior: los exámenes ya publicados con vigil
 
 En **Mis exámenes** pulsa **Ver resultados** para abrir la hoja `R_<id>` de ese examen, con una fila por envío:
 
-`fecha | nombre | grupo | aciertos | errores | blancos | nota | duracion_min | posible_duplicado | respuestas_json | salidas | segundos_fuera | tipo_envio | envio_id | motivos_salida`
+`fecha | apellidos | nombre | grupo | aciertos | errores | blancos | nota | duracion_min | posible_duplicado | respuestas_json | salidas | segundos_fuera | tipo_envio | envio_id | motivos_salida`
 
-`envio_id` es un identificador interno que evita filas repetidas si un envío se reintenta. `posible_duplicado` es `TRUE` si ya había un envío con el mismo nombre y grupo (sin tener en cuenta tildes, mayúsculas ni espacios). No se bloquea el envío; solo se marca para que lo revises.
+El alumno rellena **Nombre** y **Apellidos** en casillas separadas, y la hoja se mantiene **ordenada alfabéticamente por apellidos** (y, si coinciden, por nombre; sin distinguir tildes ni mayúsculas) cada vez que llega un envío.
+
+Las hojas de exámenes publicados **antes** de este cambio conservan su formato (una sola columna `nombre`): ahí los nuevos envíos se guardan como «Apellidos, Nombre» y no se reordenan. Para tener la hoja ordenada, publica el examen de nuevo.
+
+`envio_id` es un identificador interno que evita filas repetidas si un envío se reintenta. `posible_duplicado` es `TRUE` si ya había un envío con los mismos apellidos, nombre y grupo (sin tener en cuenta tildes, mayúsculas ni espacios). No se bloquea el envío; solo se marca para que lo revises.
 
 ### Cerrar un examen
 

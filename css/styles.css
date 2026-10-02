@@ -189,3 +189,6 @@ dialog.warning h2 { color: var(--danger); }
 .fraction-row[hidden] { display: none; }
 .fraction-row input { width: 5.5rem; text-align: center; }
 .fraction-bar { font-size: 1.6rem; line-height: 1; }
+
+/* El atributo hidden debe ganar siempre a los display de las clases (botones, filas, avisos). */
+[hidden] { display: none !important; }

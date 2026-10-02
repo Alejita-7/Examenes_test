@@ -341,3 +341,30 @@ test("createExam devuelve la penalización guardada (el panel la usa para detect
   const auto = env.post({ action: "createExam", token: "secreto", ...settings, preguntas: parseGift(GIFT) });
   assert.equal(auto.penalizacion, "");
 });
+
+/* ------------------------- pantalla completa opcional ------------------------- */
+
+test("pantalla_completa: desactivada por defecto, se guarda, se expone y se devuelve al crear", () => {
+  const env = makeEnv();
+  const flag = (extra) => {
+    const r = env.post({ action: "createExam", token: "secreto", ...settings, control_salidas: true, preguntas: parseGift(GIFT), ...extra });
+    return { id: r.id, echo: r.pantalla_completa };
+  };
+  const off = flag({});
+  const on = flag({ pantalla_completa: true });
+  assert.equal(off.echo, false);
+  assert.equal(on.echo, true);
+  assert.equal(env.get({ action: "exam", id: off.id }).exam.pantalla_completa, false);
+  assert.equal(env.get({ action: "exam", id: on.id }).exam.pantalla_completa, true);
+  const byId = Object.fromEntries(env.get({ action: "list", token: "secreto" }).exams.map((e) => [e.id, e]));
+  assert.equal(byId[on.id].pantalla_completa, true);
+  assert.equal(byId[off.id].pantalla_completa, false);
+});
+
+test("pantalla_completa llega en info antes de pedir el código; un examen anterior no la exige", () => {
+  const env = makeEnv();
+  const id = publish(env, { control_salidas: true, pantalla_completa: true, codigo_acceso: "Luz42" });
+  assert.equal(env.get({ action: "exam", id }).info.pantalla_completa, true);
+  env.sheets.get("Examenes").rows[1].length = 15; // fila anterior a la columna
+  assert.equal(env.get({ action: "exam", id, code: "Luz42" }).exam.pantalla_completa, false);
+});

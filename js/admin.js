@@ -178,7 +178,7 @@ function showPanel(initialExams) {
         return h(
           "div",
           { class: "exam-item" },
-          h("h3", {}, ex.titulo, " ", h("span", { class: `badge ${ex.activo ? "on" : "off"}` }, ex.activo ? "Abierto" : "Cerrado"), ex.control_salidas ? " " : null, ex.control_salidas ? h("span", { class: "badge on" }, `Vigilado · ${ex.salidas_permitidas ?? 3} salidas`) : null),
+          h("h3", {}, ex.titulo, " ", h("span", { class: `badge ${ex.activo ? "on" : "off"}` }, ex.activo ? "Abierto" : "Cerrado"), ex.control_salidas ? " " : null, ex.control_salidas ? h("span", { class: "badge on" }, `Vigilado · ${ex.salidas_permitidas ?? 3} salidas${ex.pantalla_completa ? " · pantalla completa" : ""}`) : null),
           h(
             "p",
             { class: "muted small meta" },
@@ -276,7 +276,12 @@ function renderCreate(box, { onPublished, onUnauthorized }) {
     salidasInput,
     h("small", { class: "hint" }, "Al superarlas, el examen se envía solo. Con 3, a la cuarta salida se envía. Con 0, se envía en la primera.")
   );
-  vigilar.input.addEventListener("change", () => (salidasInput.disabled = !vigilar.input.checked));
+  const pantallaCompleta = check("Exigir pantalla completa (opcional): pide pantalla completa al empezar y oculta el examen si se sale de ella", false);
+  const refreshVigilar = () => {
+    salidasInput.disabled = !vigilar.input.checked;
+    pantallaCompleta.input.disabled = !vigilar.input.checked;
+  };
+  vigilar.input.addEventListener("change", refreshVigilar);
 
   const msg = h("div");
   const publish = h("button", { class: "btn block", type: "submit", disabled: true }, "Publicar examen");
@@ -346,6 +351,7 @@ function renderCreate(box, { onPublished, onUnauthorized }) {
     negativa.node,
     vigilar.node,
     salidasField,
+    pantallaCompleta.node,
     msg,
     publish
   );
@@ -377,6 +383,7 @@ function renderCreate(box, { onPublished, onUnauthorized }) {
         permitir_negativa: negativa.input.checked,
         penalizacion,
         control_salidas: vigilar.input.checked,
+        pantalla_completa: vigilar.input.checked && pantallaCompleta.input.checked,
         salidas_permitidas: salidasInput.value === "" ? 3 : Math.max(0, Math.min(20, Math.floor(Number(salidasInput.value)) || 0)),
         preguntas: questions,
       });
@@ -387,6 +394,9 @@ function renderCreate(box, { onPublished, onUnauthorized }) {
         return;
       }
       // Un Code.gs anterior ignora la penalización elegida y corrige con la automática: se avisa.
+      if (pantallaCompleta.input.checked && res.pantalla_completa === undefined) {
+        res.warning = [res.warning, "El script de Google no está actualizado y no conoce la opción de pantalla completa: este examen no la exigirá. Actualiza Code.gs en Apps Script (Nueva versión) y vuelve a publicar el examen."].filter(Boolean).join(" ");
+      }
       if (penalizacion !== "" && res.penalizacion === undefined) {
         res.warning = [res.warning, "El script de Google no está actualizado y no conoce la penalización elegida: este examen se corregirá con la automática. Actualiza Code.gs en Apps Script (Nueva versión) y vuelve a publicar el examen."].filter(Boolean).join(" ");
       }

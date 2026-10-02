@@ -122,11 +122,13 @@ La nota se calcula con normalidad: la app **no pone un 0 automático**. Las colu
 |---|---|---|
 | Página oculta | Otra pestaña, otra app (cuando cubre todo), pantalla bloqueada | al instante |
 | Ventana reducida | Solo en tabletas: pantalla dividida, Slide Over o Stage Manager que reducen la ventana | 1,5 s |
-| Salir de la pantalla completa | Se pide pantalla completa al empezar; si el alumno sale de ella, el examen se oculta y un **toque en cualquier parte** (o el botón) la restaura | 5 s en tabletas, 1,5 s en ordenadores |
 | Ventana sin foco | Hacer clic en otra ventana o app | 2 s |
 | Ratón fuera de la página | Solo en ordenadores: otra ventana, otro monitor | 2 s |
+| Salir de la pantalla completa | **Solo si marcas «Exigir pantalla completa»** al publicar (opcional, desactivada por defecto). Se pide pantalla completa al empezar; si el alumno sale de ella, el examen se oculta y un **toque** en cualquier parte (o el botón) la restaura | 5 s en tabletas, 1,5 s en ordenadores |
 
-**Al empezar no se penaliza nada.** Mientras el examen no esté bien colocado (por ejemplo, sin pantalla completa), el alumno ve «Pon el examen a pantalla completa. Esto todavía no cuenta como salida», con un botón, y la vigilancia no empieza hasta que lleva 1,5 s seguidos en buen estado. Si el navegador no permite la pantalla completa, no se exige. Tras pedirla, se esperan 2,5 s a que el navegador termine de cambiar de tamaño.
+La pantalla completa es opcional porque su comportamiento depende mucho del navegador y del dispositivo. Sin ella, la vigilancia sigue funcionando con las demás señales: la pantalla dividida se detecta por el tamaño de la ventana.
+
+**Al empezar no se penaliza nada.** Mientras el examen no esté bien colocado (por ejemplo, empezado en pantalla dividida, o sin pantalla completa si la has exigido), el alumno ve un aviso («Pon el examen a toda la pantalla… Esto todavía no cuenta como salida») y la vigilancia no empieza hasta que lleva 1,5 s seguidos en buen estado. Si el navegador no permite la pantalla completa, no se exige. Tras pedirla, se esperan 2,5 s a que el navegador termine de cambiar de tamaño.
 
 Mientras el alumno está «fuera» por cualquiera de las señales, el examen se oculta. Cada salida guarda en la hoja **qué señal la provocó** (`motivos_salida`, por ejemplo `reduced,hidden`): si en algún dispositivo salen salidas que no esperas, esa columna dice la causa.
 

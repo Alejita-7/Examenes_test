@@ -31,6 +31,18 @@ const WARN_CHARS = 45000;     // aviso: cerca del límite de celda
 const MAX_CHARS = 49000;      // límite duro (la celda admite 50 000)
 const MAX_QUESTIONS = 200;
 const MAX_OPTIONS = 26;
+
+// Imágenes de los enunciados: ![descripción](archivo.png). Se guardan troceadas en la hoja "Imagenes".
+const SHEET_IMAGES = 'Imagenes';
+const IMAGE_HEADERS = ['examen', 'nombre', 'orden', 'mime', 'datos'];
+const MAX_IMAGES = 12;                 // por examen
+const MAX_IMAGE_CHARS = 330000;        // base64 de una imagen (~240 KB)
+const MAX_TOTAL_IMAGE_CHARS = 2000000; // base64 de todas las imágenes de un examen
+const IMAGE_CHUNK = 40000;             // una celda admite 50 000 caracteres
+const CACHE_PART = 90000;              // una entrada de caché admite 100 KB
+const CACHE_SECONDS = 21600;
+const IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+const FEATURES = ['imagenes'];         // capacidades de esta versión del script (las lee el panel)
 const DEFAULT_ALLOWED_EXITS = 3;   // salidas permitidas antes del envío automático
 const MAX_ALLOWED_EXITS = 20;
 
@@ -58,6 +70,7 @@ function handleGet_(params) {
   switch (params.action) {
     case 'exam': return getExam_(params);
     case 'list': return listExams_(params);
+    case 'version': return { ok: true, funciones: FEATURES };
     default: return fail_('bad_request', 'Acción no reconocida.');
   }
 }
@@ -133,6 +146,7 @@ function getExam_(params) {
       salidas_permitidas: exam.salidas_permitidas,
       penalizacion: exam.penalizacion,
       pantalla_completa: exam.pantalla_completa,
+      imagenes: loadImages_(exam.id, questions),
       questions: questions.map(function (q) {
         return {
           id: q.id,
@@ -302,6 +316,13 @@ function createExam_(p) {
     return fail_('invalid_exam', err.message);
   }
 
+  var images;
+  try {
+    images = validateImages_(p.imagenes, questions);
+  } catch (err) {
+    return fail_('invalid_exam', err.message);
+  }
+
   var tiempo = Math.floor(Number(p.tiempo_min));
   if (!isFinite(tiempo) || tiempo < 0) tiempo = 0;
 
@@ -333,11 +354,12 @@ function createExam_(p) {
       toBool_(p.pantalla_completa)
     ], [1, 3, 5, 15]);
     getResultsSheet_(id);
+    storeImages_(id, images);
   } finally {
     lock.releaseLock();
   }
 
-  var out = { ok: true, id: id, n_preguntas: questions.length, caracteres: json.length, penalizacion: penalizacion,
+  var out = { ok: true, id: id, imagenes: images.length, n_preguntas: questions.length, caracteres: json.length, penalizacion: penalizacion,
     pantalla_completa: toBool_(p.pantalla_completa) };
   if (json.length > WARN_CHARS) {
     out.warning = 'El examen ocupa ' + json.length + ' de 50 000 caracteres: está cerca del límite de la celda.';
@@ -498,6 +520,163 @@ function storedPenalty_(v) {
   } catch (err) {
     return '';
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Imágenes de los enunciados                                          */
+/* ------------------------------------------------------------------ */
+
+// Réplica de js/images.js: ![descripción](archivo.png), solo el nombre del archivo.
+var IMAGE_TOKEN = /!\[([^\]\n]*)\]\(([^)\s]+)\)/gu;
+var IMAGE_NAME_OK = /^[\p{L}\p{N}_.\-]{1,60}$/u;
+
+function imageNames_(text) {
+  var out = [];
+  String(text === undefined || text === null ? '' : text).replace(IMAGE_TOKEN, function (all, alt, name) {
+    if (out.indexOf(name) === -1) out.push(name);
+    return all;
+  });
+  return out;
+}
+
+function referencedImages_(questions) {
+  var names = [];
+  questions.forEach(function (q) {
+    imageNames_(q.text).forEach(function (n) { if (names.indexOf(n) === -1) names.push(n); });
+  });
+  return names;
+}
+
+// Comprueba las imágenes recibidas del panel frente a las citadas en las preguntas.
+// Devuelve solo las citadas, con el nombre tal como aparece en el enunciado.
+function validateImages_(input, questions) {
+  var refs = referencedImages_(questions);
+  refs.forEach(function (n) {
+    if (!IMAGE_NAME_OK.test(n) || /^https?$/i.test(n)) {
+      throw new Error('La imagen "' + n + '" no es válida: escribe solo el nombre del archivo, sin carpetas ni direcciones de internet.');
+    }
+  });
+  var given = input === undefined || input === null ? [] : input;
+  if (!Array.isArray(given)) throw new Error('Las imágenes no tienen el formato esperado.');
+  if (given.length > MAX_IMAGES) throw new Error('Demasiadas imágenes (máximo ' + MAX_IMAGES + ').');
+
+  var byName = {};
+  var total = 0;
+  given.forEach(function (img) {
+    if (!img || typeof img.nombre !== 'string' || !IMAGE_NAME_OK.test(img.nombre)) {
+      throw new Error('Una imagen tiene un nombre no válido.');
+    }
+    if (IMAGE_MIMES.indexOf(img.mime) === -1) {
+      throw new Error('La imagen "' + img.nombre + '" no es PNG, JPEG, WebP ni GIF.');
+    }
+    if (typeof img.data !== 'string' || !/^[A-Za-z0-9+\/]+=*$/.test(img.data)) {
+      throw new Error('La imagen "' + img.nombre + '" no está bien codificada.');
+    }
+    if (img.data.length > MAX_IMAGE_CHARS) {
+      throw new Error('La imagen "' + img.nombre + '" es demasiado grande (máximo unos 240 KB tras reducirla).');
+    }
+    total += img.data.length;
+    var key = img.nombre.toLowerCase();
+    if (byName[key]) throw new Error('La imagen "' + img.nombre + '" está repetida.');
+    byName[key] = img;
+  });
+  if (total > MAX_TOTAL_IMAGE_CHARS) throw new Error('Las imágenes del examen pesan demasiado en total (máximo unos 1,5 MB).');
+
+  return refs.map(function (name) {
+    var img = byName[name.toLowerCase()];
+    if (!img) throw new Error('Falta la imagen "' + name + '", citada en una pregunta.');
+    return { nombre: name, mime: img.mime, data: img.data };
+  });
+}
+
+function getImagesSheet_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(SHEET_IMAGES);
+  if (!sh) {
+    sh = ss.insertSheet(SHEET_IMAGES);
+    sh.appendRow(IMAGE_HEADERS);
+    sh.setFrozenRows(1);
+    setTextColumns_(sh, [1, 2, 3, 4, 5]);
+  }
+  return sh;
+}
+
+// Guarda las imágenes de un examen troceadas (una fila por trozo). Usar con el lock tomado.
+function storeImages_(examId, images) {
+  if (!images.length) return;
+  var rows = [];
+  images.forEach(function (img) {
+    for (var i = 0, n = 0; i < img.data.length; i += IMAGE_CHUNK, n++) {
+      rows.push([examId, img.nombre, String(n), img.mime, img.data.slice(i, i + IMAGE_CHUNK)]);
+    }
+  });
+  var sh = getImagesSheet_();
+  var start = sh.getLastRow() + 1;
+  sh.getRange(start, 1, rows.length, IMAGE_HEADERS.length).setNumberFormat('@');
+  sh.getRange(start, 1, rows.length, IMAGE_HEADERS.length).setValues(rows);
+}
+
+// Imágenes de un examen como {nombre: "data:image/png;base64,..."}, con caché (6 h) para que 30 alumnos
+// abriendo el examen a la vez no lean la hoja 30 veces.
+function loadImages_(examId, questions) {
+  var names = referencedImages_(questions);
+  if (!names.length) return {};
+  var cache = null;
+  try { cache = CacheService.getScriptCache(); } catch (err) { cache = null; }
+
+  var metaKey = 'imgm:' + examId;
+  if (cache) {
+    try {
+      var meta = cache.get(metaKey);
+      if (meta) {
+        var list = JSON.parse(meta);
+        var keys = [];
+        list.forEach(function (it, k) { for (var j = 0; j < it.n; j++) keys.push('imgp:' + examId + ':' + k + ':' + j); });
+        var parts = cache.getAll(keys);
+        var ok = keys.every(function (key) { return parts[key] !== undefined && parts[key] !== null; });
+        if (ok) {
+          var cached = {};
+          list.forEach(function (it, k) {
+            var data = '';
+            for (var j = 0; j < it.n; j++) data += parts['imgp:' + examId + ':' + k + ':' + j];
+            cached[it.nombre] = 'data:' + it.mime + ';base64,' + data;
+          });
+          return cached;
+        }
+      }
+    } catch (err) { /* sin caché: se lee de la hoja */ }
+  }
+
+  var rows = getImagesSheet_().getDataRange().getValues();
+  var byName = {};
+  var order = [];
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) !== String(examId)) continue;
+    var nombre = String(rows[i][1]);
+    if (!byName[nombre]) { byName[nombre] = { mime: String(rows[i][3]), chunks: [] }; order.push(nombre); }
+    byName[nombre].chunks[Number(rows[i][2])] = String(rows[i][4]);
+  }
+  var out = {};
+  var forCache = [];
+  order.forEach(function (nombre) {
+    var data = byName[nombre].chunks.join('');
+    out[nombre] = 'data:' + byName[nombre].mime + ';base64,' + data;
+    forCache.push({ nombre: nombre, mime: byName[nombre].mime, data: data });
+  });
+
+  if (cache && forCache.length) {
+    try {
+      var put = {};
+      var metaList = forCache.map(function (it, k) {
+        var n = 0;
+        for (var i2 = 0; i2 < it.data.length; i2 += CACHE_PART, n++) put['imgp:' + examId + ':' + k + ':' + n] = it.data.slice(i2, i2 + CACHE_PART);
+        return { nombre: it.nombre, mime: it.mime, n: n };
+      });
+      put[metaKey] = JSON.stringify(metaList);
+      cache.putAll(put, CACHE_SECONDS);
+    } catch (err) { /* la caché es opcional */ }
+  }
+  return out;
 }
 
 // Salidas permitidas antes del envío automático: entero 0..20; 3 si no se indica.

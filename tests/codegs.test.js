@@ -467,3 +467,98 @@ test("las hojas anteriores (sin apellidos) siguen funcionando y no se reordenan"
   assert.deepEqual([cell(rows, 1, "nombre"), cell(rows, 2, "nombre")], ["Zapata, Marta", "Álvarez, Pedro"], "orden de llegada");
   assert.equal(rows[0].length, 15, "no se añaden columnas");
 });
+
+/* ------------------------- imágenes en los enunciados ------------------------- */
+
+// "Imágenes" de mentira: base64 válido y de tamaño controlado (el servidor no las decodifica).
+const fakeB64 = (n, ch = "A") => ch.repeat(n);
+const GIFT_IMG = "::P1::Observa ![gráfica](grafica1.png) y responde{=a~b~c}\n\n::P2::Sin imagen{=a~b}\n\n::P3::Otra ![circuito](Circuito-2.png){=a~b}";
+const imgs = (...names) => names.map((nombre) => ({ nombre, mime: "image/png", data: fakeB64(1000) }));
+const publishImg = (env, extra = {}) =>
+  env.post({ action: "createExam", token: "secreto", ...settings, preguntas: parseGift(GIFT_IMG), ...extra });
+
+test("version: el panel puede saber qué funciones tiene el script", () => {
+  const env = makeEnv();
+  assert.deepEqual(plain(env.get({ action: "version" })), { ok: true, funciones: ["imagenes"] });
+});
+
+test("imágenes: se guardan troceadas, se devuelven al alumno y las preguntas no filtran la solución", () => {
+  const env = makeEnv();
+  const big = { nombre: "grafica1.png", mime: "image/png", data: "QUJD".repeat(25000) }; // 100 000 caracteres -> 3 trozos
+  const r = publishImg(env, { imagenes: [big, ...imgs("Circuito-2.png")] });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.equal(r.imagenes, 2);
+  const rows = env.sheets.get("Imagenes").rows;
+  assert.deepEqual(plain(rows[0]), ["examen", "nombre", "orden", "mime", "datos"]);
+  assert.equal(rows.filter((x) => x[1] === "grafica1.png").length, 3, "100 000 caracteres = 3 trozos de 40 000");
+  assert.ok(rows.slice(1).every((x) => String(x[4]).length <= 40000), "ningún trozo supera el límite de celda");
+  const got = env.get({ action: "exam", id: r.id });
+  assert.equal(got.ok, true);
+  assert.equal(got.exam.imagenes["grafica1.png"], `data:image/png;base64,${big.data}`, "se recompone idéntica");
+  assert.equal(got.exam.imagenes["Circuito-2.png"], `data:image/png;base64,${fakeB64(1000)}`);
+  assert.ok(!JSON.stringify(got).includes("correct"));
+});
+
+test("imágenes: con código de acceso no se envían hasta acertar el código", () => {
+  const env = makeEnv();
+  const r = publishImg(env, { imagenes: imgs("grafica1.png", "Circuito-2.png"), codigo_acceso: "Luz42" });
+  const sin = env.get({ action: "exam", id: r.id });
+  assert.equal(sin.error, "code_required");
+  assert.ok(!JSON.stringify(sin).includes("base64"));
+  assert.ok(env.get({ action: "exam", id: r.id, code: "Luz42" }).exam.imagenes["grafica1.png"]);
+});
+
+test("imágenes: un examen sin imágenes no toca la hoja Imagenes", () => {
+  const env = makeEnv();
+  const id = publish(env);
+  assert.deepEqual(plain(env.get({ action: "exam", id }).exam.imagenes), {});
+  assert.equal(env.sheets.has("Imagenes"), false);
+});
+
+test("imágenes: falta una imagen citada, nombre no válido, tipo, tamaño y número", () => {
+  const env = makeEnv();
+  const fail = (extra, texto) => {
+    const r = publishImg(env, extra);
+    assert.equal(r.error, "invalid_exam", texto);
+    return r.message;
+  };
+  assert.match(fail({ imagenes: imgs("grafica1.png") }, "falta Circuito-2"), /Falta la imagen "Circuito-2.png"/);
+  assert.match(fail({}, "sin imágenes"), /Falta la imagen/);
+  assert.match(fail({ imagenes: [{ nombre: "grafica1.png", mime: "image/svg+xml", data: "AAAA" }, ...imgs("Circuito-2.png")] }, "svg"), /no es PNG/);
+  assert.match(fail({ imagenes: [{ nombre: "grafica1.png", mime: "image/png", data: "no es base64!" }, ...imgs("Circuito-2.png")] }, "base64"), /bien codificada/);
+  assert.match(fail({ imagenes: [{ nombre: "grafica1.png", mime: "image/png", data: fakeB64(330001) }, ...imgs("Circuito-2.png")] }, "grande"), /demasiado grande/);
+  assert.match(fail({ imagenes: [...imgs("grafica1.png", "Circuito-2.png", "GRAFICA1.PNG")] }, "repetida"), /repetida/);
+  const many = Array.from({ length: 13 }, (_, i) => imgs(`i${i}.png`)[0]);
+  assert.match(fail({ imagenes: many }, "13"), /Demasiadas/);
+  const heavy = Array.from({ length: 7 }, (_, i) => ({ nombre: `h${i}.png`, mime: "image/png", data: fakeB64(300000) }));
+  assert.match(fail({ imagenes: heavy }, "total"), /pesan demasiado/);
+});
+
+test("imágenes: las citas con carpetas o direcciones de internet se rechazan", () => {
+  const env = makeEnv();
+  for (const cita of ["https://web.com/a.png", "carpeta/a.png", "a b.png"]) {
+    const qs = [{ id: "q1", title: "", text: `Mira ![x](${cita})`, options: [{ id: "a", text: "1" }, { id: "b", text: "2" }], correct: "a" }];
+    const r = env.post({ action: "createExam", token: "secreto", ...settings, preguntas: qs, imagenes: imgs("a.png") });
+    // "a b.png" no forma una cita válida (lleva un espacio): el texto queda como texto y no pide imagen
+    if (cita.includes(" ")) assert.equal(r.ok, true); else assert.equal(r.error, "invalid_exam", cita);
+  }
+});
+
+test("imágenes: se sirven desde la caché la segunda vez y funcionan sin ella", () => {
+  const env = makeEnv();
+  const r = publishImg(env, { imagenes: imgs("grafica1.png", "Circuito-2.png") });
+  const first = env.get({ action: "exam", id: r.id }).exam.imagenes;
+  assert.ok(env.cache.has(`imgm:${r.id}`), "tras la primera lectura queda en caché");
+  env.sheets.get("Imagenes").rows.length = 1; // si leyera de la hoja, ya no habría imágenes
+  assert.deepEqual(plain(env.get({ action: "exam", id: r.id }).exam.imagenes), plain(first), "la segunda vez sale de la caché");
+  env.cache.clear();
+  assert.deepEqual(plain(env.get({ action: "exam", id: r.id }).exam.imagenes), {}, "sin caché se lee de la hoja");
+});
+
+test("imágenes: las imágenes de un examen no se mezclan con las de otro", () => {
+  const env = makeEnv();
+  const a = publishImg(env, { imagenes: [{ nombre: "grafica1.png", mime: "image/png", data: fakeB64(500, "A") }, ...imgs("Circuito-2.png")] });
+  const b = publishImg(env, { imagenes: [{ nombre: "grafica1.png", mime: "image/png", data: fakeB64(500, "B") }, ...imgs("Circuito-2.png")] });
+  assert.ok(env.get({ action: "exam", id: a.id }).exam.imagenes["grafica1.png"].endsWith("A".repeat(500)));
+  assert.ok(env.get({ action: "exam", id: b.id }).exam.imagenes["grafica1.png"].endsWith("B".repeat(500)));
+});

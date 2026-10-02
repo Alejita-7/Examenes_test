@@ -83,6 +83,29 @@ Escribe las preguntas en un archivo de texto con este formato (la respuesta corr
 }
 ```
 
+### Imágenes en las preguntas
+
+En el enunciado puedes poner una imagen con esta marca, que lleva **solo el nombre del archivo**:
+
+```
+::P05::Observa la gráfica. ¿Qué movimiento representa?
+![gráfica velocidad-tiempo](grafica1.png){
+=Movimiento uniformemente acelerado
+~Movimiento uniforme
+~Reposo
+}
+```
+
+Al cargar el GIFT en el panel, aparece **«Imágenes de las preguntas»** con las que cita el examen. Selecciona los archivos de tu ordenador (todos a la vez; no distingue mayúsculas) y el panel:
+
+- **Los reduce** a un máximo de 1000 píxeles y los comprime: una foto en PNG de varios MB queda en unos 150 KB (como JPEG); un esquema o dibujo de líneas se conserva como PNG si es pequeño.
+- Te los **enseña en la vista previa** y no deja publicar mientras falte alguno.
+- Los guarda en la pestaña `Imagenes` de **tu hoja de Google** (no en GitHub, así que no se ven antes del examen) y los entrega al alumno con el examen, solo después de acertar el código de acceso.
+
+Límites: hasta **12 imágenes por examen** y unos **1,5 MB** en total. Solo van en el **enunciado** (no en las opciones). El texto entre corchetes es la descripción alternativa (para lectores de pantalla). No valen direcciones de internet ni rutas con carpetas.
+
+Requiere `Code.gs` actualizado: si no lo está, el panel lo detecta y **no publica** (para no dejar un examen sin imágenes). No borres la pestaña `Imagenes`.
+
 Reglas:
 - Una pregunta por bloque; los bloques se separan con una línea en blanco.
 - El título `::P01::` es opcional.

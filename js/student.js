@@ -4,6 +4,7 @@ import { fetchExam, submitExam, beaconSubmit, NetworkError, ConfigError } from "
 import { h } from "./dom.js";
 import { isReducedWindow } from "./presence.js";
 import { createWatcher } from "./watch.js";
+import { richNodes } from "./rich.js";
 import { normalize, seededShuffle, formatClock, penaltyFraction, formatNumber, newSendId } from "./util.js";
 import { parsePenalty } from "./grading.js";
 
@@ -290,7 +291,7 @@ function renderExam(session) {
 
   questions.forEach((q, i) => {
     const group = h("fieldset", { class: "question card question-card", id: `p${i + 1}` });
-    group.append(h("legend", {}, h("span", { class: "qnum" }, `${i + 1}.`), q.text));
+    group.append(h("legend", {}, h("span", { class: "qnum" }, `${i + 1}.`), ...richNodes(q.text, exam.imagenes)));
     const name = `q-${q.id}`;
     const radios = q.options.map((o, j) => {
       const input = h("input", { type: "radio", name, value: o.id, checked: progress.answers[q.id] === o.id });

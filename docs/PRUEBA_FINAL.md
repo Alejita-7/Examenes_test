@@ -24,7 +24,7 @@ Esta guía **no contiene soluciones**: las respuestas correctas las miras tú en
 
 Abre el enlace (o escanea el QR) con el móvil.
 
-- [ ] Pide nombre, grupo y código. Un código incorrecto da error; el correcto abre el examen.
+- [ ] Pide **nombre**, **apellidos** (casillas separadas), grupo y código. Un código incorrecto da error; el correcto abre el examen.
 - [ ] La pantalla inicial explica la puntuación («cada respuesta incorrecta resta 1/3»).
 - [ ] Los botones se pulsan bien con el dedo y el texto se lee sin hacer zoom.
 - [ ] «Dejar en blanco» deshace una respuesta.
@@ -62,6 +62,12 @@ Otros casos rápidos (cada uno es un envío más, con otro nombre):
 - [ ] Con 20 preguntas, 12 aciertos, 5 errores y 3 en blanco, la nota es **(12 − 5 × 1/4) / 20 × 10 = 5,38**. Comprueba que la hoja y el alumno ven ese valor.
 - [ ] Publica otro con **«Sin penalización»**: los errores no restan y la pantalla inicial dice «Las respuestas incorrectas no restan».
 - [ ] Publica otro con una fracción propia (por ejemplo 2/5) y comprueba la columna `penalizacion` de la pestaña `Examenes` (debe verse `2/5`, no una fecha).
+
+## 3c. Nombre, apellidos y orden
+
+- [ ] La pantalla inicial tiene **Nombre** y **Apellidos** por separado; si falta uno, avisa de cuál.
+- [ ] Envía tres exámenes con alumnos de prueba, por ejemplo «Marta Zapata», «Pedro Álvarez» y «Luis Benítez». En `R_<id>`, las filas aparecen **ordenadas por apellidos**: Álvarez, Benítez, Zapata (las tildes no alteran el orden), con las columnas `apellidos` y `nombre` separadas.
+- [ ] Dos alumnos con los mismos apellidos quedan ordenados por nombre.
 
 ## 4. Duplicados, cierre y límites
 

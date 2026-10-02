@@ -27,6 +27,20 @@ class FakeSheet {
           });
         });
       },
+      getValues: () => this.rows.slice(row - 1, row - 1 + nRows).map((r) => Array.from({ length: nCols }, (_, j) => r[col - 1 + j] ?? "")),
+      // Como Sheets: ordena las filas del rango por las columnas indicadas (texto sin distinguir mayúsculas ni tildes).
+      sort: (specs) => {
+        const block = this.rows.slice(row - 1, row - 1 + nRows);
+        const key = (r, c) => String(r[c - 1] ?? "");
+        block.sort((a, b) => {
+          for (const { column, ascending = true } of specs) {
+            const d = key(a, column - col + 1).localeCompare(key(b, column - col + 1), "es", { sensitivity: "base" });
+            if (d) return ascending ? d : -d;
+          }
+          return 0;
+        });
+        block.forEach((r, i) => (this.rows[row - 1 + i] = r));
+      },
       setNumberFormat: (fmt) => {
         for (let i = 0; i < nRows; i++) for (let j = 0; j < nCols; j++) {
           if (fmt === "@") this.textCells.add(`${row + i},${col + j}`);

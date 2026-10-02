@@ -16,13 +16,17 @@ const EXAM_HEADERS = [
   'preguntas_json', 'creado', 'control_salidas', 'salidas_permitidas', 'penalizacion',
   'pantalla_completa'
 ];
-const RESULT_HEADERS = [
-  'fecha', 'nombre', 'grupo', 'aciertos', 'errores', 'blancos', 'nota',
-  'duracion_min', 'posible_duplicado', 'respuestas_json',
-  'salidas', 'segundos_fuera', 'tipo_envio', 'envio_id', 'motivos_salida'
+// Hoja de resultados (una por examen). Orden de las columnas de las hojas nuevas; las hojas de versiones
+// anteriores se leen por el nombre de la cabecera y reciben al final las columnas extra que les falten.
+const RESULT_BASE = [
+  'fecha', 'apellidos', 'nombre', 'grupo', 'aciertos', 'errores', 'blancos', 'nota',
+  'duracion_min', 'posible_duplicado', 'respuestas_json'
 ];
+const RESULT_EXTRA = ['salidas', 'segundos_fuera', 'tipo_envio', 'envio_id', 'motivos_salida'];
+const RESULT_HEADERS = RESULT_BASE.concat(RESULT_EXTRA);
+const RESULT_TEXT_COLUMNS = ['apellidos', 'nombre', 'grupo', 'envio_id', 'motivos_salida']; // nunca números ni fechas
 const ENVIO_TYPES = ['manual', 'tiempo', 'salida'];
-const MAX_TEXT = 60;          // nombre y grupo
+const MAX_TEXT = 60;          // nombre, apellidos y grupo
 const WARN_CHARS = 45000;     // aviso: cerca del límite de celda
 const MAX_CHARS = 49000;      // límite duro (la celda admite 50 000)
 const MAX_QUESTIONS = 200;
@@ -143,9 +147,15 @@ function getExam_(params) {
 
 function submit_(p) {
   var nombre = cleanText_(p.nombre);
+  var apellidos = cleanText_(p.apellidos);
   var grupo = cleanText_(p.grupo);
   if (!nombre || nombre.length > MAX_TEXT) {
     return fail_('invalid_name', 'El nombre es obligatorio (máximo ' + MAX_TEXT + ' caracteres).');
+  }
+  // Una página anterior solo enviaba el nombre completo: sin el campo `apellidos` se acepta igualmente.
+  var hasSurnameField = p.apellidos !== undefined && p.apellidos !== null;
+  if (hasSurnameField && (!apellidos || apellidos.length > MAX_TEXT)) {
+    return fail_('invalid_surname', 'Los apellidos son obligatorios (máximo ' + MAX_TEXT + ' caracteres).');
   }
   if (!grupo || grupo.length > MAX_TEXT) {
     return fail_('invalid_group', 'El grupo es obligatorio (máximo ' + MAX_TEXT + ' caracteres).');
@@ -200,33 +210,56 @@ function submit_(p) {
   try {
     var sheet = getResultsSheet_(exam.id);
     var rows = sheet.getDataRange().getValues();
+    var headers = rows[0].map(String);
+    var H = headerMap_(headers); // nombre de columna -> posición (desde 0)
+    var hasApellidos = H.apellidos !== undefined;
 
     // Un mismo envío (mismo envioId) nunca crea dos filas: solo completa los datos de salidas.
     var sameSend = -1;
-    if (envioId) {
+    if (envioId && H.envio_id !== undefined) {
       for (var k = 1; k < rows.length; k++) {
-        if (String(rows[k][13]) === envioId) { sameSend = k; break; }
+        if (String(rows[k][H.envio_id]) === envioId) { sameSend = k; break; }
       }
     }
     if (sameSend !== -1) {
-      sheet.getRange(sameSend + 1, 11).setValue(Math.max(Number(rows[sameSend][10]) || 0, salidas));
-      sheet.getRange(sameSend + 1, 12).setValue(Math.max(Number(rows[sameSend][11]) || 0, segundosFuera));
-      if (motivos.length > String(rows[sameSend][14] || '').length) sheet.getRange(sameSend + 1, 15).setValue(motivos);
+      sheet.getRange(sameSend + 1, H.salidas + 1).setValue(Math.max(Number(rows[sameSend][H.salidas]) || 0, salidas));
+      sheet.getRange(sameSend + 1, H.segundos_fuera + 1).setValue(Math.max(Number(rows[sameSend][H.segundos_fuera]) || 0, segundosFuera));
+      if (motivos.length > String(rows[sameSend][H.motivos_salida] || '').length) {
+        sheet.getRange(sameSend + 1, H.motivos_salida + 1).setValue(motivos);
+      }
     } else {
-      var n = normalize_(nombre);
+      // En hojas anteriores (sin columna de apellidos) el nombre se guarda como "Apellidos, Nombre".
+      var fullName = hasApellidos || !apellidos ? nombre : apellidos + ', ' + nombre;
+      var who = normalize_(apellidos) + '|' + normalize_(nombre);
       var g = normalize_(grupo);
       var duplicado = false;
       for (var i = 1; i < rows.length; i++) {
-        if (normalize_(rows[i][1]) === n && normalize_(rows[i][2]) === g) {
+        var other = hasApellidos
+          ? normalize_(rows[i][H.apellidos]) + '|' + normalize_(rows[i][H.nombre])
+          : normalize_(rows[i][H.nombre]);
+        if (other === (hasApellidos ? who : normalize_(fullName)) && normalize_(rows[i][H.grupo]) === g) {
           duplicado = true;
           break;
         }
       }
-      appendRowText_(sheet, [
-        new Date(), nombre, grupo, result.aciertos, result.errores, result.blancos,
-        result.nota, duracion, duplicado, JSON.stringify(answers),
-        salidas, segundosFuera, tipoEnvio, envioId, motivos
-      ], [2, 3, 14, 15]);
+      var values = {
+        fecha: new Date(), apellidos: apellidos, nombre: fullName, grupo: grupo,
+        aciertos: result.aciertos, errores: result.errores, blancos: result.blancos, nota: result.nota,
+        duracion_min: duracion, posible_duplicado: duplicado, respuestas_json: JSON.stringify(answers),
+        salidas: salidas, segundos_fuera: segundosFuera, tipo_envio: tipoEnvio, envio_id: envioId,
+        motivos_salida: motivos
+      };
+      var textCols = [];
+      var row = headers.map(function (name, idx) {
+        if (RESULT_TEXT_COLUMNS.indexOf(name) !== -1) textCols.push(idx + 1);
+        return values[name] === undefined ? '' : values[name];
+      });
+      appendRowText_(sheet, row, textCols);
+      // Las filas quedan ordenadas por apellidos y, a igualdad, por nombre.
+      if (hasApellidos && sheet.getLastRow() > 2) {
+        sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length)
+          .sort([{ column: H.apellidos + 1, ascending: true }, { column: H.nombre + 1, ascending: true }]);
+      }
     }
   } finally {
     lock.releaseLock();
@@ -548,6 +581,13 @@ function appendRowText_(sheet, values, textCols) {
   sheet.getRange(row, 1, 1, values.length).setValues([values]);
 }
 
+// Cabeceras de una hoja -> posición de cada una (desde 0).
+function headerMap_(headers) {
+  var map = {};
+  headers.forEach(function (h, i) { if (map[h] === undefined) map[h] = i; });
+  return map;
+}
+
 // Si la hoja es de una versión anterior (menos columnas), añade las cabeceras que faltan.
 function ensureHeaders_(sheet, headers) {
   for (var i = sheet.getLastColumn(); i < headers.length; i++) {
@@ -577,9 +617,13 @@ function getResultsSheet_(examId) {
     sh = ss.insertSheet(name);
     sh.appendRow(RESULT_HEADERS);
     sh.setFrozenRows(1);
-    setTextColumns_(sh, [2, 3, 14, 15]);
+    setTextColumns_(sh, RESULT_TEXT_COLUMNS.map(function (name) { return RESULT_HEADERS.indexOf(name) + 1; }));
   } else {
-    ensureHeaders_(sh, RESULT_HEADERS);
+    // Hoja de una versión anterior: se añaden al final las columnas extra que falten (por nombre).
+    var have = headerMap_(sh.getDataRange().getValues()[0].map(String));
+    RESULT_EXTRA.forEach(function (name) {
+      if (have[name] === undefined) sh.getRange(1, sh.getLastColumn() + 1).setValue(name);
+    });
   }
   return sh;
 }

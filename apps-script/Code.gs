@@ -292,7 +292,8 @@ function submit_(p) {
         duracion_min: duracion, posible_duplicado: duplicado, respuestas_json: JSON.stringify(answers),
         salidas: salidas, segundos_fuera: segundosFuera, tipo_envio: tipoEnvio, envio_id: envioId,
         motivos_salida: motivos,
-        puntos_test: result.puntosTest, puntos_total: result.puntosTotal, pegados: pegados
+        puntos_test: result.puntosTest, puntos_total: result.puntosTotal, pegados: pegados,
+        pendientes: result.abiertas // preguntas abiertas sin corregir; la nota es la del test hasta que se corrija
       };
       var openQs = questions.filter(isOpen_);
       openQs.forEach(function (q) { values[openColumns_(q, questions).resp] = openAnswers[q.id] || ''; });
@@ -302,18 +303,6 @@ function submit_(p) {
         return values[name] === undefined ? '' : values[name];
       });
       appendRowText_(sheet, row, textCols);
-      if (openQs.length) {
-        // Nota final automática: test + puntos que el profesor ponga a cada abierta (referencias de columna absolutas).
-        var lastRow = sheet.getLastRow();
-        var ptsRefs = openQs.map(function (q) { return 'RC' + (H[openColumns_(q, questions).pts] + 1); });
-        if (H.pendientes !== undefined) {
-          sheet.getRange(lastRow, H.pendientes + 1).setFormulaR1C1('=' + openQs.length + '-COUNT(' + ptsRefs.join(',') + ')');
-        }
-        // `nota` pasa a ser la nota final: test + puntos de las abiertas (mientras no corrijas, es la nota del test).
-        var inner = '(RC' + (H.puntos_test + 1) + '+SUM(' + ptsRefs.join(',') + '))/RC' + (H.puntos_total + 1) + '*10';
-        sheet.getRange(lastRow, H.nota + 1)
-          .setFormulaR1C1(exam.permitir_negativa ? '=ROUND(' + inner + ',2)' : '=ROUND(MAX(0,' + inner + '),2)');
-      }
       // Las filas quedan ordenadas por apellidos y, a igualdad, por nombre.
       if (hasApellidos && sheet.getLastRow() > 2) {
         sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length)
@@ -560,7 +549,11 @@ function grade_(p) {
       rows[i][H[c.pts]] = puntos === null ? '' : puntos;
       var openQs = questions.filter(isOpen_);
       var pend = openQs.filter(function (x) { var v = rows[i][H[openColumns_(x, questions).pts]]; return v === '' || v === undefined; }).length;
-      return { ok: true, puntos: puntos, pendientes: pend, nota: finalGrade_(exam, openQs, questions, rows[i], H) };
+      var nota = finalGrade_(exam, openQs, questions, rows[i], H);
+      // Se escriben valores (no fórmulas): la nota y las pendientes de la hoja siempre coinciden con el panel.
+      if (nota !== '') sh.getRange(i + 1, (H.nota_final !== undefined ? H.nota_final : H.nota) + 1).setValue(nota);
+      if (H.pendientes !== undefined) sh.getRange(i + 1, H.pendientes + 1).setValue(pend);
+      return { ok: true, puntos: puntos, pendientes: pend, nota: nota };
     }
     return fail_('not_found', 'No se ha encontrado ese envío.');
   } finally {

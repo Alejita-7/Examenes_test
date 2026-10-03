@@ -30,7 +30,7 @@ test("se crea con tipo y valor; el alumno recibe tipo y valor pero nunca la solu
   assert.ok(!JSON.stringify(got).includes("correct"));
 });
 
-test("envío con abierta: texto en la hoja, fórmulas de nota final y el alumno solo ve el test", () => {
+test("envío con abierta: texto en la hoja, nota provisional y el alumno solo ve el test", () => {
   const env = makeEnv();
   const { id } = publish(env);
   const r = env.post(base(id, { respuestas: { q1: "a", q2: "a" }, abiertas: { q3: "Las plantas\r\nusan luz" }, pegados: 2 }));
@@ -46,17 +46,19 @@ test("envío con abierta: texto en la hoja, fórmulas de nota final y el alumno 
   assert.equal(cell(rows, 1, resp), "Las plantas\nusan luz");
   assert.equal(cell(rows, 1, "pegados"), 2);
   assert.equal(cell(rows, 1, "puntos_total"), 6);
-  const P = col(rows, pts) + 1;
-  assert.equal(cell(rows, 1, "pendientes"), "=1-COUNT(RC" + P + ")");
-  assert.ok(cell(rows, 1, "nota").startsWith("=ROUND(MAX(0,(RC"), cell(rows, 1, "nota"));
+  assert.equal(cell(rows, 1, "pendientes"), 1);
+  assert.equal(cell(rows, 1, "nota"), 2.78, "provisional: solo el test (1,67 de 6 puntos)");
   assert.ok(!rows[0].includes("nota_final"), "solo hay una columna de nota");
 });
 
-test("con permitir_negativa la nota final no se recorta a 0", () => {
+test("con permitir_negativa la nota puede ser negativa al corregir", () => {
   const env = makeEnv();
   const { id } = publish(env, { permitir_negativa: true });
-  env.post(base(id, { respuestas: { q1: "b" }, abiertas: {} }));
-  assert.ok(!cell(env.sheets.get(`R_${id}`).rows, 1, "nota").includes("MAX(0"));
+  env.post(base(id, { respuestas: { q1: "b" }, abiertas: {}, envioId: "n1" }));
+  const rows = env.sheets.get(`R_${id}`).rows;
+  assert.ok(cell(rows, 1, "nota") < 0);
+  const g = env.post({ action: "grade", token: "secreto", examId: id, envioId: "n1", qid: "q3", puntos: 0 });
+  assert.ok(g.nota < 0, JSON.stringify(g));
 });
 
 test("validación: id de abierta desconocido, test dentro de abiertas, demasiado largo", () => {
@@ -101,7 +103,7 @@ test("varias abiertas y orden por apellidos con columnas extra", () => {
   const rows = env.sheets.get(`R_${id}`).rows;
   assert.deepEqual([cell(rows, 1, "apellidos"), cell(rows, 2, "apellidos")], ["Álvarez", "Zapata"]);
   assert.equal(cell(rows, 1, rows[0].find((h) => h.startsWith("Q1") && h.endsWith("respuesta"))), "Pedro1");
-  assert.ok(cell(rows, 1, "pendientes").startsWith("=2-COUNT("));
+  assert.equal(cell(rows, 1, "pendientes"), 2);
 });
 
 test("hoja nueva: lo importante primero y las columnas técnicas ocultas al final", () => {
@@ -137,6 +139,8 @@ test("grade: guarda los puntos de una abierta, recalcula la nota y valida", () =
   const ok = g(2);
   assert.deepEqual(plain([ok.ok, ok.puntos, ok.pendientes, ok.nota]), [true, 2, 0, 8.33]);
   assert.equal(env.post({ action: "results", token: "secreto", examId: id }).rows[0].abiertas.q3.puntos, 2);
+  const rows = env.sheets.get(`R_${id}`).rows;
+  assert.deepEqual([cell(rows, 1, "nota"), cell(rows, 1, "pendientes")], [8.33, 0], "la hoja se actualiza al corregir");
   assert.equal(g(4).error, "invalid_grade", "más del máximo");
   assert.equal(g(-1).error, "invalid_grade");
   assert.equal(g(1, { qid: "q1" }).error, "invalid_grade", "no es abierta");

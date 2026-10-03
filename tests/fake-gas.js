@@ -65,7 +65,8 @@ export function makeEnv(token = "secreto", { uuid: uuidFn } = {}) {
   let n = 0;
   const ss = {
     getSheetByName: (name) => sheets.get(name) ?? null,
-    insertSheet: (name) => { const s = new FakeSheet(name, ++n); sheets.set(name, s); return s; },
+    getSheets: () => [...sheets.values()],
+    insertSheet: (name) => { if (sheets.has(name)) throw new Error(`Ya existe una hoja llamada ${name}`); const s = new FakeSheet(name, ++n); sheets.set(name, s); return s; },
     getUrl: () => "https://docs.google.com/spreadsheets/d/X/edit",
   };
   const props = token ? { ADMIN_TOKEN: token } : {};
@@ -98,6 +99,12 @@ export function makeEnv(token = "secreto", { uuid: uuidFn } = {}) {
   return {
     sheets,
     cache,
+    // Hoja de resultados de un examen, buscada como el script: por el hoja_id guardado en «Examenes».
+    results: (id) => {
+      const ex = sheets.get("Examenes").rows.find((r) => String(r[0]) === String(id));
+      return [...sheets.values()].find((s) => s.id === ex[16]) ?? null;
+    },
+    rename: (from, to) => { const s = sheets.get(from); sheets.delete(from); s.name = to; sheets.set(to, s); },
     get: (params) => run(`handleGet_`)(params),
     post: (body) => run(`handlePost_`)(body),
     fn: (name) => run(name),

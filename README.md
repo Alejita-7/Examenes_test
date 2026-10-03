@@ -236,7 +236,7 @@ Cada salida guarda en la hoja **qué señal la provocó** (`motivos_salida`, por
 
 ### Ver resultados
 
-En **Mis exámenes** pulsa **Ver hoja de Google** para abrir la hoja `R_<id>` de ese examen, con una fila por envío:
+En **Mis exámenes** pulsa **Ver hoja de Google** para abrir la hoja de ese examen (una pestaña **con el título del examen**; si repites título, se añade « (2)»; puedes renombrarla sin problema), con una fila por envío:
 
 Las hojas **nuevas** están pensadas para leerse de un vistazo: cabecera azul, filas alternas, y esta primera parte visible:
 

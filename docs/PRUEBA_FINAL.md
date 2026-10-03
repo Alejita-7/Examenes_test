@@ -17,7 +17,7 @@ Esta guía **no contiene soluciones**: las respuestas correctas las miras tú en
 - [ ] Subes el examen del tema 1: la vista previa muestra **20 preguntas** y cada una tiene marcada la respuesta que esperas.
 - [ ] Ajustes sugeridos para la prueba: tiempo 30 min, código de acceso generado, barajar preguntas y opciones, mostrar nota **activado**.
 - [ ] Publicas: aparecen el enlace y el QR.
-- [ ] En la hoja de Google han aparecido la fila del examen en `Examenes` y una pestaña `R_<id>`.
+- [ ] En la hoja de Google han aparecido la fila del examen en `Examenes` y una pestaña con el título del examen.
 - [ ] La celda `preguntas_json` contiene las soluciones (es normal: la hoja es privada). Confirma que la hoja **no está compartida** con nadie.
 
 ## 2. Hacer el examen desde el móvil
@@ -44,7 +44,7 @@ Contesta con exactamente estos resultados (mira tu archivo GIFT para saber cuál
 Cálculo: `(12 − 5 × 1/3) / 20 × 10 = 5,1667` → **5,17**
 
 - [ ] El alumno ve **5,17 / 10**, con 12 aciertos, 5 errores y 3 en blanco.
-- [ ] En `R_<id>` hay una fila con: aciertos 12, errores 5, blancos 3, nota **5,17**, `posible_duplicado` = FALSE.
+- [ ] En la hoja del examen hay una fila con: aciertos 12, errores 5, blancos 3, nota **5,17**, `posible_duplicado` = FALSE.
 - [ ] `respuestas_json` contiene las 20 preguntas (las 3 en blanco como `null`).
 
 Otros casos rápidos (cada uno es un envío más, con otro nombre):
@@ -66,7 +66,7 @@ Otros casos rápidos (cada uno es un envío más, con otro nombre):
 ## 3c. Nombre, apellidos y orden
 
 - [ ] La pantalla inicial tiene **Nombre** y **Apellidos** por separado; si falta uno, avisa de cuál.
-- [ ] Envía tres exámenes con alumnos de prueba, por ejemplo «Marta Zapata», «Pedro Álvarez» y «Luis Benítez». En `R_<id>`, las filas aparecen **ordenadas por apellidos**: Álvarez, Benítez, Zapata (las tildes no alteran el orden), con las columnas `apellidos` y `nombre` separadas.
+- [ ] Envía tres exámenes con alumnos de prueba, por ejemplo «Marta Zapata», «Pedro Álvarez» y «Luis Benítez». En la hoja del examen, las filas aparecen **ordenadas por apellidos**: Álvarez, Benítez, Zapata (las tildes no alteran el orden), con las columnas `apellidos` y `nombre` separadas.
 - [ ] Dos alumnos con los mismos apellidos quedan ordenados por nombre.
 
 ## 3d. Imágenes en las preguntas
@@ -81,7 +81,7 @@ Otros casos rápidos (cada uno es un envío más, con otro nombre):
 ## 4. Duplicados, cierre y límites
 
 - [ ] Repites el envío con el mismo nombre y grupo, cambiando tildes o mayúsculas (por ejemplo «MARTA RUIZ» en vez de «Marta Ruiz»): la fila nueva sale con `posible_duplicado` = TRUE y no se bloquea.
-- [ ] Panel → **Mis exámenes** muestra el número correcto de envíos y **Ver resultados** abre la hoja `R_<id>`.
+- [ ] Panel → **Mis exámenes** muestra el número correcto de envíos y **Ver resultados** abre su hoja de resultados.
 - [ ] **Cerrar examen**: al abrir el enlace el alumno ve «Examen cerrado», y un alumno que ya lo tenía abierto no puede enviar.
 - [ ] **Abrir examen** lo reactiva.
 - [ ] Probar el tiempo límite: publica un examen de 1 minuto, empieza y espera: al llegar a 0 se envía solo con lo contestado.
@@ -95,7 +95,7 @@ Publica un examen con **Vigilar salidas** marcado y **2 salidas permitidas** (as
 - [ ] **Salida 1:** sal a la pantalla de inicio, espera unos 5 segundos y vuelve. Aparece un aviso rojo («AVISO: has salido del examen… Está prohibido… si continúas saliendo, el examen se enviará») y **sigues pudiendo hacer el examen** con tus respuestas intactas. En la hoja todavía **no hay fila**.
 - [ ] **Salida 2:** igual. El aviso aparece de nuevo y sigues dentro.
 - [ ] **Salida 3:** al salir por tercera vez y volver, el examen aparece enviado, con el aviso «se ha enviado automáticamente porque has salido de la pantalla del examen».
-- [ ] En `R_<id>` hay **una sola fila** con `salidas` = 3, `tipo_envio` = `salida` y `segundos_fuera` con la suma del tiempo de las salidas.
+- [ ] En la hoja del examen hay **una sola fila** con `salidas` = 3, `tipo_envio` = `salida` y `segundos_fuera` con la suma del tiempo de las salidas.
 - [ ] Prueba con otro nombre: sal **una vez** y envía tú el examen con el botón. La fila debe tener `salidas` = 1, `tipo_envio` = `manual` y `segundos_fuera` > 0.
 - [ ] Prueba con otro nombre: sal una vez y **recarga la página** sin enviar. Al volver a entrar con el mismo nombre y grupo, sigues dentro del examen (verás el aviso rojo).
 - [ ] Prueba cambiar de pestaña y bloquear la pantalla: ambas cuentan como salida.
@@ -132,5 +132,5 @@ Anota el mensaje exacto que aparece, la hora y si ocurrió en ordenador o móvil
 - [ ] El alumno ve un cuadro de texto en la abierta; al pegar (Ctrl+V / mantener pulsado → Pegar) no entra nada y en la hoja aparece `pegados` ≥ 1.
 - [ ] Tras enviar, el alumno ve «Parte tipo test: X sobre Y puntos» y que las abiertas las corrige el profesor, sin nota final.
 - [ ] En «Mis exámenes» aparece **Corregir abiertas**. Se ven las respuestas en cajas legibles; escribe 2 en una (Intro): sale «Guardado ✓» y el progreso sube.
-- [ ] En `R_<id>`: la hoja se ve limpia (cabecera azul, filas alternas), `nota` se actualiza sola con la corrección, `pendientes` baja a 0 y las columnas técnicas están ocultas (selecciona las vecinas → «Mostrar columnas»).
+- [ ] En la hoja del examen: la hoja se ve limpia (cabecera azul, filas alternas), `nota` se actualiza sola con la corrección, `pendientes` baja a 0 y las columnas técnicas están ocultas (selecciona las vecinas → «Mostrar columnas»).
 - [ ] **Exportar notas (CSV)** descarga un archivo que abre bien en Excel (acentos, coma decimal).

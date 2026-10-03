@@ -6,7 +6,9 @@ import { isReducedWindow } from "./presence.js";
 import { createWatcher } from "./watch.js";
 import { richNodes } from "./rich.js";
 import { normalize, seededShuffle, formatClock, penaltyFraction, formatNumber, newSendId } from "./util.js";
-import { parsePenalty } from "./grading.js";
+import { parsePenalty, questionValue, isOpenQuestion } from "./grading.js";
+
+const MAX_OPEN_CHARS = 4000;
 
 const MAX_TEXT = 60;
 const RETRY_DELAYS = [2000, 4000, 8000];
@@ -105,7 +107,11 @@ function scoringText(questions, penalizacion) {
   } catch {
     custom = null;
   }
-  const ks = new Set((questions ?? []).map((q) => q.options.length));
+  const qs = questions ?? [];
+  const tests = qs.filter((q) => !isOpenQuestion(q));
+  const opens = qs.filter(isOpenQuestion);
+  const weighted = qs.some((q) => questionValue(q) !== 1); // alguna pregunta no vale 1 punto
+  const ks = new Set(tests.map((q) => q.options.length));
   let penalty; // texto de lo que resta cada error, o null si no resta nada
   if (custom) {
     penalty = custom.num === 0 ? null : custom.den === 1 ? `${custom.num} punto` : `${custom.num}/${custom.den} de punto`;
@@ -115,11 +121,15 @@ function scoringText(questions, penalizacion) {
         ? `${penaltyFraction([...ks][0])} de punto`
         : "una fracción de punto (1/3 si la pregunta tiene 4 opciones)";
   }
+  if (weighted && penalty) penalty = penalty.replace(/ de punto$| punto$/, (m) => (m.startsWith(" de") ? " de los puntos de la pregunta" : " vez los puntos de la pregunta"));
   return [
-    "Cada respuesta correcta suma 1 punto.",
+    weighted ? "Cada pregunta indica los puntos que vale. Una respuesta correcta suma todos sus puntos." : "Cada respuesta correcta suma 1 punto.",
     penalty ? `Cada respuesta incorrecta resta ${penalty}.` : "Las respuestas incorrectas no restan.",
     "Las preguntas en blanco ni suman ni restan.",
     ...(penalty ? ["Si no estás seguro, puedes dejarla en blanco."] : []),
+    ...(opens.length
+      ? [`Hay ${opens.length === 1 ? "una pregunta abierta" : `${opens.length} preguntas abiertas`}: escribes tu respuesta en un cuadro de texto (no se puede copiar ni pegar) y la corrige tu profesor.`]
+      : []),
   ];
 }
 
@@ -249,6 +259,8 @@ function startExam(exam, who) {
   progress.segundosFuera = Number(progress.segundosFuera) || 0;
   progress.leftAt = progress.leftAt || null;
   progress.motivos = Array.isArray(progress.motivos) ? progress.motivos : [];
+  progress.open = progress.open && typeof progress.open === "object" ? progress.open : {};
+  progress.pegados = Number(progress.pegados) || 0;
   store.set(key, JSON.stringify(progress));
   store.set(lastKey(), JSON.stringify(who));
 
@@ -257,12 +269,12 @@ function startExam(exam, who) {
   let questions = exam.questions.map((q) => ({ ...q }));
   if (exam.barajar_preguntas) questions = seededShuffle(questions, `${seed}|q`);
   if (exam.barajar_opciones) {
-    questions = questions.map((q) => ({ ...q, options: seededShuffle(q.options, `${seed}|o|${q.id}`) }));
+    questions = questions.map((q) => (isOpenQuestion(q) ? q : { ...q, options: seededShuffle(q.options, `${seed}|o|${q.id}`) }));
   }
   // Descarta respuestas guardadas que ya no correspondan a este examen.
   for (const q of questions) {
     const given = progress.answers[q.id];
-    if (given && !q.options.some((o) => o.id === given)) delete progress.answers[q.id];
+    if (given && (isOpenQuestion(q) || !q.options.some((o) => o.id === given))) delete progress.answers[q.id];
   }
 
   renderExam({ exam, questions, who, key, progress });
@@ -285,13 +297,28 @@ function renderExam(session) {
   const timer = h("span", { class: "timer", role: "timer" });
   const status = h("div", { class: "status", hidden: true, role: "status" });
   const fieldset = h("fieldset", { class: "question" });
-  const answered = () => questions.filter((q) => progress.answers[q.id]).length;
+  const isAnswered = (q) => (isOpenQuestion(q) ? Boolean((progress.open[q.id] ?? "").trim()) : Boolean(progress.answers[q.id]));
+  const answered = () => questions.filter(isAnswered).length;
+  const showPoints = questions.some((q) => questionValue(q) !== 1);
   const updateCounter = () => (counter.textContent = `Contestadas: ${answered()} de ${total}`);
   const save = () => store.set(key, JSON.stringify(progress));
 
   questions.forEach((q, i) => {
     const group = h("fieldset", { class: "question card question-card", id: `p${i + 1}` });
-    group.append(h("legend", {}, h("span", { class: "qnum" }, `${i + 1}.`), ...richNodes(q.text, exam.imagenes)));
+    group.append(
+      h(
+        "legend",
+        {},
+        h("span", { class: "qnum" }, `${i + 1}.`),
+        ...richNodes(q.text, exam.imagenes),
+        showPoints ? h("span", { class: "points-badge" }, `${formatNumber(questionValue(q))} ${questionValue(q) === 1 ? "punto" : "puntos"}`) : null
+      )
+    );
+    if (isOpenQuestion(q)) {
+      group.append(openAnswerBox(q));
+      fieldset.append(group);
+      return;
+    }
     const name = `q-${q.id}`;
     const radios = q.options.map((o, j) => {
       const input = h("input", { type: "radio", name, value: o.id, checked: progress.answers[q.id] === o.id });
@@ -326,6 +353,49 @@ function renderExam(session) {
     fieldset.append(group);
   });
 
+  // Respuesta abierta: un cuadro de texto donde no se puede pegar, copiar, cortar ni arrastrar texto.
+  function openAnswerBox(q) {
+    const area = h("textarea", {
+      class: "open-answer",
+      rows: 6,
+      maxlength: MAX_OPEN_CHARS,
+      autocomplete: "off",
+      autocapitalize: "sentences",
+      spellcheck: "false",
+      "aria-label": "Tu respuesta",
+      placeholder: "Escribe aquí tu respuesta",
+    });
+    area.setAttribute("autocorrect", "off");
+    area.value = progress.open[q.id] ?? "";
+    const left = h("small", { class: "hint" });
+    const refresh = () => (left.textContent = `${area.value.length} / ${MAX_OPEN_CHARS} caracteres`);
+    const blocked = () => {
+      progress.pegados += 1; // queda registrado para el profesor
+      save();
+    };
+    for (const type of ["paste", "drop"]) {
+      area.addEventListener(type, (e) => {
+        e.preventDefault();
+        blocked();
+      });
+    }
+    for (const type of ["copy", "cut", "dragstart"]) area.addEventListener(type, (e) => e.preventDefault());
+    area.addEventListener("beforeinput", (e) => {
+      if (e.inputType === "insertFromPaste" || e.inputType === "insertFromDrop" || e.inputType === "insertFromYank") {
+        e.preventDefault();
+        blocked();
+      }
+    });
+    area.addEventListener("input", () => {
+      progress.open[q.id] = area.value;
+      save();
+      refresh();
+      updateCounter();
+    });
+    refresh();
+    return h("div", { class: "open-box" }, area, left);
+  }
+
   const reviewBtn = h("button", { type: "button", class: "btn block", onclick: () => confirmSend() }, "Revisar y enviar");
 
   const lock = () => {
@@ -334,7 +404,7 @@ function renderExam(session) {
   };
 
   function confirmSend() {
-    const blanks = questions.map((q, i) => (progress.answers[q.id] ? null : i + 1)).filter(Boolean);
+    const blanks = questions.map((q, i) => (isAnswered(q) ? null : i + 1)).filter(Boolean);
     const dialog = h("dialog");
     const close = () => {
       dialog.close();
@@ -383,7 +453,11 @@ function renderExam(session) {
 
   function buildPayload(motivo) {
     const respuestas = {};
-    for (const q of exam.questions) respuestas[q.id] = progress.answers[q.id] ?? null;
+    const abiertas = {};
+    for (const q of exam.questions) {
+      if (isOpenQuestion(q)) abiertas[q.id] = (progress.open[q.id] ?? "").slice(0, MAX_OPEN_CHARS);
+      else respuestas[q.id] = progress.answers[q.id] ?? null;
+    }
     return {
       examId,
       nombre: who.nombre,
@@ -391,6 +465,8 @@ function renderExam(session) {
       grupo: who.grupo,
       code: who.code,
       respuestas,
+      abiertas,
+      pegados: progress.pegados,
       duracion_min: Math.round(((Date.now() - progress.startedAt) / 60000) * 100) / 100,
       salidas: progress.salidas,
       // Incluye el tiempo de una salida que todavía no ha terminado (el alumno envía sin haber vuelto).
@@ -633,8 +709,12 @@ function renderExam(session) {
   );
   if (watched) {
     // Frena copiar, cortar, pegar, el menú contextual y seleccionar texto (disuasorio).
+    // Los cuadros de respuesta abierta se excluyen: ahí hay que poder escribir y colocar el cursor.
     for (const type of ["copy", "cut", "paste", "contextmenu", "selectstart", "dragstart"]) {
-      screen.addEventListener(type, (e) => e.preventDefault());
+      screen.addEventListener(type, (e) => {
+        if (e.target?.closest?.("textarea.open-answer")) return;
+        e.preventDefault();
+      });
     }
   }
   render(screen);
@@ -674,7 +754,14 @@ function showDone(res, motivo = "manual") {
       motivo === "salida"
         ? h("div", { class: "notice warn" }, h("p", {}, "El examen se ha enviado automáticamente porque has salido de la pantalla del examen. Tu profesor lo verá registrado."))
         : null,
-      hasScore
+      res.abiertas > 0 && typeof res.puntos_test === "number"
+        ? [
+            h("p", { class: "muted" }, "Parte tipo test"),
+            h("div", { class: "big-result" }, `${formatNumber(res.puntos_test)} sobre ${formatNumber(res.puntos_test_max)} puntos`),
+            h("p", {}, `Aciertos: ${res.aciertos} · Errores: ${res.errores} · En blanco: ${res.blancos}`),
+            h("p", { class: "muted" }, "Las preguntas abiertas las corregirá tu profesor: tu nota final llegará cuando las revise."),
+          ]
+        : hasScore
         ? [
             h("p", { class: "muted" }, "Tu nota"),
             h("div", { class: "big-result" }, `${formatNumber(res.nota)} / 10`),

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseGift, GiftError } from "../js/gift.js";
+import { parseGift, parseValue, GiftError } from "../js/gift.js";
 
 const SAMPLE = `// comentario
 ::P01::¿Qué nos convierte en científicos?{
@@ -32,6 +32,8 @@ test("parsea el ejemplo del enunciado", () => {
       { id: "d", text: "Tener un título universitario" },
     ],
     correct: "a",
+    valor: 1,
+    tipo: "test",
   });
   assert.equal(qs[1].correct, "b");
   assert.equal(qs[1].options.length, 3);
@@ -108,4 +110,67 @@ test("recoge todos los errores a la vez", () => {
 test("error si no hay preguntas", () => {
   assert.throws(() => parseGift("// solo comentarios\n"), GiftError);
   assert.throws(() => parseGift(""), GiftError);
+});
+
+/* ---------------- valor de cada pregunta y preguntas abiertas ---------------- */
+
+test("sin marca, cada pregunta vale 1", () => {
+  const qs = parseGift("A{=x~y}\n\nB{=x~y}");
+  assert.deepEqual(qs.map((q) => q.valor), [1, 1]);
+});
+
+test("[valor=N] al principio del enunciado, con título o sin él", () => {
+  const qs = parseGift("::P1::[valor=2] ¿Cuánto es 1+1?{=2~3}\n\n[valor=0,5] Sin título{=a~b}\n\n::P3::  [valor = 1/4]   Con espacios{=a~b}");
+  assert.deepEqual(qs.map((q) => q.valor), [2, 0.5, 0.25]);
+  assert.equal(qs[0].text, "¿Cuánto es 1+1?", "la marca no queda en el enunciado");
+  assert.equal(qs[1].text, "Sin título");
+  assert.equal(qs[2].text, "Con espacios");
+});
+
+test("[puntos=N] y [valor: N] también valen; mayúsculas y decimales con punto", () => {
+  const qs = parseGift("[PUNTOS=1.5] A{=x~y}\n\n[Valor: 3] B{=x~y}");
+  assert.deepEqual(qs.map((q) => q.valor), [1.5, 3]);
+});
+
+test("una marca que no está al principio es texto normal", () => {
+  const [q] = parseGift("Explica qué significa [valor=2] en física{=x~y}");
+  assert.equal(q.valor, 1);
+  assert.equal(q.text, "Explica qué significa [valor=2] en física");
+});
+
+test("valores no válidos se rechazan indicando la pregunta", () => {
+  for (const bad of ["0", "-1", "abc", "", "1/0", "101", "2,5,5"]) {
+    assert.throws(() => parseGift(`[valor=${bad}] A{=x~y}`), /Pregunta 1: el valor/, bad);
+  }
+});
+
+test("parseValue", () => {
+  assert.equal(parseValue("2"), 2);
+  assert.equal(parseValue("0,25"), 0.25);
+  assert.equal(parseValue("1/3"), 0.3333);
+  assert.equal(parseValue(" 10 "), 10);
+  assert.throws(() => parseValue("0"));
+});
+
+test("llaves vacías = pregunta abierta", () => {
+  const [q] = parseGift("::P7::[valor=3] Explica por qué flota un barco.{}");
+  assert.deepEqual(q, { id: "q1", title: "P7", text: "Explica por qué flota un barco.", options: [], correct: null, valor: 3, tipo: "abierta" });
+  assert.equal(parseGift("Abierta{ }")[0].tipo, "abierta");
+  assert.equal(parseGift("Abierta{\n}")[0].tipo, "abierta");
+});
+
+test("abierta con imagen y texto después de la llave", () => {
+  const [q] = parseGift("Observa ![fig](f.png) y explica{} (máx. 5 líneas)");
+  assert.equal(q.tipo, "abierta");
+  assert.equal(q.text, "Observa ![fig](f.png) y explica (máx. 5 líneas)");
+});
+
+test("preguntas test y abiertas mezcladas; los errores de test siguen indicando su número", () => {
+  const qs = parseGift("A{=x~y}\n\n[valor=2] B{}\n\nC{=x~y}");
+  assert.deepEqual(qs.map((q) => q.tipo), ["test", "abierta", "test"]);
+  assert.throws(() => parseGift("A{=x~y}\n\nB{}\n\nC{~x~y}"), /Pregunta 3.*exactamente una/);
+});
+
+test("una pregunta con contenido sin = ni ~ sigue siendo un error (no se toma por abierta)", () => {
+  assert.throws(() => parseGift("A{texto suelto}"), /Pregunta 1.*al menos 2 opciones/);
 });

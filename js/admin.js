@@ -3,7 +3,7 @@ import { apiGet, apiPost, NetworkError, ConfigError } from "./api.js";
 import { parseGift, GiftError } from "./gift.js";
 import { h } from "./dom.js";
 import { studentLink, randomCode, formatNumber } from "./util.js";
-import { parsePenalty } from "./grading.js";
+import { parsePenalty, questionValue, isOpenQuestion } from "./grading.js";
 import { collectImageRefs, matchImage, MAX_IMAGES, MAX_TOTAL_IMAGE_CHARS } from "./images.js";
 import { prepareImage } from "./image-encode.js";
 import { richNodes } from "./rich.js";
@@ -313,8 +313,20 @@ function renderCreate(box, { onPublished, onUnauthorized }) {
     imageRefs = collectImageRefs(questions);
     const size = JSON.stringify(questions).length;
     tooBig = size > MAX_CHARS;
+    const nOpen = questions.filter(isOpenQuestion).length;
+    const pts = (list) => formatNumber(list.reduce((sum, q) => sum + questionValue(q), 0));
+    const tests = questions.filter((q) => !isOpenQuestion(q));
     preview.append(
       h("p", {}, h("strong", {}, `${questions.length} preguntas`), ` · ${size.toLocaleString("es-ES")} de 50 000 caracteres`),
+      // Reparto de puntos: la nota final siempre es sobre 10 (puntos obtenidos / puntos totales × 10).
+      h(
+        "div",
+        { class: "notice info" },
+        h("p", {}, h("strong", {}, "Reparto de puntos")),
+        h("p", {}, `Test: ${tests.length} ${tests.length === 1 ? "pregunta" : "preguntas"} · ${pts(tests)} puntos.`),
+        nOpen ? h("p", {}, `Abiertas: ${nOpen} ${nOpen === 1 ? "pregunta" : "preguntas"} · ${pts(questions.filter(isOpenQuestion))} puntos (las corriges tú en la hoja de Google).`) : null,
+        h("p", {}, `Total: ${pts(questions)} puntos → la nota se calcula sobre 10.`)
+      ),
       tooBig ? notice("error", "El examen es demasiado grande para una celda de Google Sheets. Divídelo en dos exámenes.") : size > WARN_CHARS ? notice("warn", "El examen está cerca del límite de tamaño de una celda de Google Sheets.") : null,
       h(
         "div",
@@ -323,8 +335,8 @@ function renderCreate(box, { onPublished, onUnauthorized }) {
           h(
             "div",
             { class: "q-preview" },
-            h("div", { class: "q-text" }, h("strong", {}, `${i + 1}. `, q.title ? `[${q.title}] ` : ""), ...richNodes(q.text, imageMap())),
-            h("ol", {}, q.options.map((o) => h("li", { class: o.id === q.correct ? "correct" : null }, o.text, o.id === q.correct ? " ✓" : "")))
+            h("div", { class: "q-text" }, h("strong", {}, `${i + 1}. `, q.title ? `[${q.title}] ` : ""), ...richNodes(q.text, imageMap()), h("span", { class: "points-badge" }, `${formatNumber(questionValue(q))} ${questionValue(q) === 1 ? "punto" : "puntos"}${isOpenQuestion(q) ? " · abierta" : ""}`)),
+            isOpenQuestion(q) ? h("p", { class: "muted small" }, "Respuesta abierta: el alumno escribe en un cuadro de texto.") : h("ol", {}, q.options.map((o) => h("li", { class: o.id === q.correct ? "correct" : null }, o.text, o.id === q.correct ? " ✓" : "")))
           )
         )
       )
@@ -460,11 +472,15 @@ function renderCreate(box, { onPublished, onUnauthorized }) {
     publish.disabled = true;
     publish.textContent = "Publicando…";
     try {
-      if (imagenes.length) {
-        // Un Code.gs anterior ignoraría las imágenes y el examen saldría roto: se comprueba antes de publicar.
+      // Un Code.gs anterior ignoraría imágenes, valores o preguntas abiertas y el examen saldría roto: se comprueba antes.
+      const needs = [];
+      if (imagenes.length) needs.push(["imagenes", "guardar imágenes"]);
+      if (questions.some((q) => isOpenQuestion(q) || questionValue(q) !== 1)) needs.push(["abiertas", "usar preguntas abiertas ni puntos por pregunta"]);
+      if (needs.length) {
         const v = await apiGet({ action: "version" });
-        if (!v.ok || !Array.isArray(v.funciones) || !v.funciones.includes("imagenes")) {
-          msg.append(notice("error", "El script de Google no está actualizado y no sabe guardar imágenes. Actualiza Code.gs en Apps Script (Nueva versión) y vuelve a publicar."));
+        const missing = needs.find(([f]) => !v.ok || !Array.isArray(v.funciones) || !v.funciones.includes(f));
+        if (missing) {
+          msg.append(notice("error", `El script de Google no está actualizado y no sabe ${missing[1]}. Actualiza Code.gs en Apps Script (Nueva versión) y vuelve a publicar.`));
           publish.disabled = false;
           return;
         }

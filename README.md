@@ -93,6 +93,83 @@ Escribe las preguntas en un archivo de texto con este formato (la respuesta corr
 
 **Guarda estos archivos fuera del repositorio** (llevan las soluciones). El `.gitignore` bloquea `*.gift` y `*.txt`, pero lo más seguro es no ponerlos nunca en la carpeta del proyecto.
 
+### Puntos por pregunta y preguntas abiertas
+
+**Cuántos puntos vale cada pregunta.** Se escribe en el propio GIFT con la marca `[valor=N]` **al principio del enunciado** (justo después del título `::…::`, si lo hay). Si no la pones, la pregunta vale **1**. Acepta enteros y decimales (`2`, `0,5`, `0.5`, `1/2`), mayores que 0 y como mucho 100. También vale `[puntos=N]`.
+
+```
+::P01::[valor=2] ¿Cuánto es 2 + 2?{
+~3
+=4
+~5
+}
+```
+
+**Preguntas abiertas.** Una pregunta con las llaves **vacías** `{}` es abierta: al alumno se le muestra un cuadro de texto (hasta 4 000 caracteres) donde escribe su respuesta. En ese cuadro **no se puede pegar, copiar, cortar ni arrastrar texto**; cada intento de pegar queda contado en la columna `pegados` de la hoja. (Nadie puede impedir que alguien teclee algo que lee en otro dispositivo: el control real es que el examen esté vigilado y que corrijas tú.)
+
+```
+::A01::[valor=3] Explica con tus palabras qué es el método científico.{}
+```
+
+**Cómo se reparte la nota.** La nota final siempre es **sobre 10**: `nota = puntos obtenidos / suma de los valores de TODAS las preguntas × 10`. Por ejemplo, 20 preguntas de test a 0,4 puntos y 2 abiertas de 1 punto suman 10 puntos en total; no hace falta que los valores sumen 10, la aplicación proporciona. En el panel, al cargar el GIFT, aparece el **reparto de puntos** (test, abiertas, total) y cada pregunta lleva su valor.
+
+**La penalización escala con el valor**: un error en una pregunta de 2 puntos resta el doble que en una de 1 (con la penalización 1/3, resta 2/3 de punto).
+
+**Corregir las abiertas (en tu hoja de Google).** En `R_<id>` cada pregunta abierta añade dos columnas: `Q3 … respuesta` (lo que escribió el alumno) y `Q3 … puntos (máx 3)` (la rellenas tú, de 0 al máximo). Además:
+
+- `puntos_test`: puntos conseguidos en el test; `puntos_total`: suma de todos los valores.
+- `pendientes`: cuántas abiertas te quedan por puntuar en esa fila.
+- `nota_final`: se calcula sola con una fórmula `(puntos_test + tus puntos) / puntos_total × 10` en cuanto rellenas las abiertas.
+- La columna `nota` es **provisional** (solo cuenta el test; las abiertas valen 0 hasta que las corrijas): usa `nota_final`.
+
+**Qué ve el alumno.** Solo la parte del test: «Parte tipo test: X sobre Y puntos» y el aviso de que las abiertas las corrige el profesor. Si quitas «Mostrar la nota al alumno», no ve nada.
+
+Requiere `Code.gs` actualizado; si no lo está, el panel lo detecta y **no publica** el examen.
+
+### Generar el GIFT con una IA
+
+Si vas a pedirle el GIFT a una IA (ChatGPT, Claude, etc.), **pégale este bloque** antes de tus apuntes y añade al final los puntos que quieres. Así el resultado funciona a la primera:
+
+````text
+Genera preguntas en formato GIFT para mi aplicación de exámenes. Devuelve SOLO el texto GIFT dentro de un único bloque de código, sin explicaciones.
+
+REGLAS DEL FORMATO (obligatorias):
+1. Una pregunta por bloque; separa los bloques con UNA línea en blanco.
+2. Estructura de una pregunta de TEST:
+   ::P01::[valor=N] Enunciado de la pregunta{
+   =Opción correcta
+   ~Opción incorrecta
+   ~Opción incorrecta
+   ~Opción incorrecta
+   }
+3. Cada pregunta de test tiene EXACTAMENTE UNA opción correcta (=) y entre 2 y 6 opciones (preferible 4). Nada de varias correctas, verdadero/falso con %pesos%, huecos ni emparejamientos.
+4. Varía la posición de la opción correcta (no la pongas siempre la primera).
+5. No pongas feedback (#...), ni pesos (%50%), ni categorías ($CATEGORY), ni formato [html]/[markdown].
+6. PUNTOS: la marca [valor=N] va al PRINCIPIO del enunciado, justo después del título ::Pxx::. N es un número mayor que 0 (usa punto o coma decimal: 1, 2, 0.5). Si una pregunta vale 1 punto puedes omitirla.
+7. PREGUNTAS ABIERTAS (respuesta escrita por el alumno): llaves VACÍAS, sin opciones. Ejemplo:
+   ::A01::[valor=3] Explica con tus palabras qué es el método científico.{}
+8. Para escribir los caracteres : = ~ # { } dentro de un texto, ponles delante una barra invertida (\= \{ \}...). Evita fórmulas en LaTeX; escribe las fórmulas con texto simple (v = d/t, 3x^2).
+9. Imágenes (solo en el enunciado, no en opciones): ![descripción](nombre.png) con un nombre de archivo simple, sin carpetas ni http. Solo si yo te indico qué imágenes hay.
+10. Títulos ::P01::, ::P02::... correlativos (A01, A02... para abiertas). Los comentarios empiezan por //.
+
+PUNTUACIÓN QUE QUIERO:
+[ESCRÍBELO AQUÍ, por ejemplo:]
+- 20 preguntas de test de 0.5 puntos cada una.
+- 2 preguntas abiertas de 2 puntos cada una.
+````
+
+**Cómo indicarle los puntos a la IA** (lo escribes tú al final del bloque, en lenguaje normal; la IA lo traduce a `[valor=N]`):
+
+| Lo que quieres | Lo que le escribes |
+|---|---|
+| Todas iguales | «20 preguntas de test, todas de 0,5 puntos.» |
+| Test normal y alguna más importante | «15 preguntas de test de 1 punto, y las preguntas 14 y 15 de 2 puntos.» |
+| Test + abiertas | «18 de test de 0,5 puntos y 2 abiertas de 3 puntos cada una.» |
+| Por dificultad | «Fáciles (1 punto), medias (1,5) y difíciles (2); pon 5 de cada.» |
+| Una abierta concreta | «La última pregunta es abierta y vale 4 puntos.» |
+
+No hace falta que sumen 10: la nota se proporciona sobre 10 con el total. Revisa siempre la **vista previa del panel** (respuesta correcta marcada ✓, valor de cada pregunta y reparto total) antes de publicar: la IA puede equivocarse, y la corrección del test depende de que la opción marcada con `=` sea la buena.
+
 ### Imágenes en las preguntas
 
 En el enunciado puedes poner una imagen con esta marca, que lleva **solo el nombre del archivo**:
@@ -162,7 +239,9 @@ Cada salida guarda en la hoja **qué señal la provocó** (`motivos_salida`, por
 
 En **Mis exámenes** pulsa **Ver resultados** para abrir la hoja `R_<id>` de ese examen, con una fila por envío:
 
-`fecha | apellidos | nombre | grupo | aciertos | errores | blancos | nota | duracion_min | posible_duplicado | respuestas_json | salidas | segundos_fuera | tipo_envio | envio_id | motivos_salida`
+`fecha | apellidos | nombre | grupo | aciertos | errores | blancos | nota | duracion_min | posible_duplicado | respuestas_json | salidas | segundos_fuera | tipo_envio | envio_id | motivos_salida | puntos_test | puntos_total | pegados`
+
+Si el examen tiene preguntas abiertas, al final se añaden sus columnas de respuesta y puntos, `pendientes` y `nota_final` (ver «Puntos por pregunta y preguntas abiertas»).
 
 El alumno rellena **Nombre** y **Apellidos** en casillas separadas, y la hoja se mantiene **ordenada alfabéticamente por apellidos** (y, si coinciden, por nombre; sin distinguir tildes ni mayúsculas) cada vez que llega un envío.
 
@@ -176,7 +255,7 @@ Desde **Mis exámenes → Cerrar examen**. Los alumnos que abran el enlace verá
 
 ### Cómo se calcula la nota
 
-Cada acierto suma **1 punto**, cada pregunta en blanco **0** y cada error **resta una fracción de punto**.
+Cada acierto suma los puntos de la pregunta (**1** si no pone `[valor=N]`), cada pregunta en blanco **0** y cada error **resta una fracción de esos puntos**. Las preguntas abiertas las puntúas tú en la hoja (ver arriba); el resto de esta sección explica el test con preguntas de 1 punto.
 
 Al publicar el examen eliges la **penalización por cada error**, siempre como fracción:
 
@@ -189,7 +268,7 @@ Al publicar el examen eliges la **penalización por cada error**, siempre como f
 
 El panel muestra un ejemplo con la fracción elegida (12 aciertos, 5 errores y 3 en blanco de 20 preguntas), y el alumno ve en la pantalla inicial lo que resta cada error. La fracción se guarda reducida (2/6 pasa a 1/3).
 
-`nota = (aciertos − errores × penalización) / nº de preguntas × 10`, redondeada a 2 decimales. Por defecto la nota mínima es 0 (se puede permitir negativa al publicar el examen).
+`nota = (aciertos − errores × penalización) / nº de preguntas × 10` (con valores distintos: `(Σ puntos acertados − Σ puntos de errores × penalización) / Σ puntos de todas las preguntas × 10`), redondeada a 2 decimales. Por defecto la nota mínima es 0 (se puede permitir negativa al publicar el examen).
 
 Los exámenes ya publicados antes de poder elegir la penalización siguen con la automática. Si publicas con un `Code.gs` antiguo, el panel te avisa de que la penalización elegida no se aplicará.
 
@@ -250,8 +329,8 @@ css/styles.css             Estilos (claro y oscuro)
 js/config.js               URL del Apps Script
 js/api.js                  Llamadas al Apps Script (POST como text/plain, sin preflight CORS)
 js/student.js, admin.js    Lógica de cada página
-js/gift.js                 Parser GIFT (función pura)
-js/grading.js              Corrección y penalización fraccionaria (pura; replicada en Code.gs)
+js/gift.js                 Parser GIFT: [valor=N] y preguntas abiertas {} (función pura)
+js/grading.js              Corrección ponderada y penalización fraccionaria (pura; replicada en Code.gs)
 js/images.js               Citas de imágenes ![alt](archivo.png) y límites (puro; réplica parcial en Code.gs)
 js/image-encode.js         Reduce y codifica las imágenes en el navegador (canvas)
 js/rich.js                 Pinta un enunciado con imágenes sin insertar HTML

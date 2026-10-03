@@ -397,6 +397,7 @@ function createExam_(p) {
       toBool_(p.pantalla_completa),
       resultsSheet.getSheetId()
     ], [1, 3, 5, 15]);
+    formatExamsSheet_(getExamsSheet_()); // también embellece la hoja de quien ya la tenía
     storeImages_(id, images);
   } finally {
     lock.releaseLock();
@@ -973,6 +974,7 @@ function getExamsSheet_() {
     sh.appendRow(EXAM_HEADERS);
     sh.setFrozenRows(1);
     setTextColumns_(sh, [1, 3, 5]);
+    formatExamsSheet_(sh);
   } else {
     ensureHeaders_(sh, EXAM_HEADERS);
   }
@@ -1061,6 +1063,52 @@ function resultHeaders_(questions) {
   });
   if (open.length) cols.push('pendientes');
   return cols;
+}
+
+// Solo presentación (se puede repetir sin problema): cabecera de color, filas alternas, «activo» en verde o rojo
+// y ocultas las columnas técnicas (las preguntas con sus soluciones y el identificador de la hoja de resultados).
+function formatExamsSheet_(sh) {
+  var n = EXAM_HEADERS.length;
+  var col = function (name) { return EXAM_HEADERS.indexOf(name) + 1; };
+  var rowsMax = sh.getMaxRows();
+  try {
+    sh.setFrozenRows(1);
+    sh.setFrozenColumns(2);
+    sh.setColumnWidth(col('id'), 95);
+    sh.setColumnWidth(col('titulo'), 280);
+    sh.setColumnWidth(col('grupo_destino'), 90);
+    sh.setColumnWidth(col('codigo_acceso'), 100);
+    sh.setColumnWidth(col('creado'), 140);
+    sh.hideColumns(col('preguntas_json'), 1);
+    sh.hideColumns(col('hoja_id'), 1);
+  } catch (err) {
+    console.error(err);
+  }
+  try {
+    sh.getRange(1, 1, 1, n).setFontWeight('bold').setBackground('#1f5fbf').setFontColor('#ffffff')
+      .setHorizontalAlignment('center').setVerticalAlignment('middle').setWrap(true);
+    sh.setRowHeight(1, 38);
+    sh.getRange(1, col('titulo'), 1, 1).setHorizontalAlignment('left');
+    sh.getRange(2, 1, rowsMax - 1, n).setVerticalAlignment('middle')
+      .setBorder(true, true, true, true, true, true, '#d9dee5', SpreadsheetApp.BorderStyle.SOLID);
+    sh.getRange(2, col('activo'), rowsMax - 1, n - col('activo') + 1).setHorizontalAlignment('center');
+    sh.getRange(2, col('titulo'), rowsMax - 1, 1).setFontWeight('bold');
+    sh.getRange(2, col('creado'), rowsMax - 1, 1).setNumberFormat('dd/mm/yyyy hh:mm');
+    var letter = String.fromCharCode(64 + col('activo'));
+    var rule = function (formula, bg, fg) {
+      return SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied(formula).setBackground(bg).setFontColor(fg).setBold(true)
+        .setRanges([sh.getRange(2, col('activo'), rowsMax - 1, 1)]).build();
+    };
+    sh.setConditionalFormatRules([
+      rule('=$' + letter + '2=TRUE', '#dff3e4', '#176b34'),
+      rule('=$' + letter + '2=FALSE', '#fde2e1', '#a4262c')
+    ]);
+    var old = sh.getBandings();
+    for (var i = 0; i < old.length; i++) old[i].remove();
+    sh.getRange(2, 1, rowsMax - 1, n).applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY, false, false);
+  } catch (err) {
+    console.error(err);
+  }
 }
 
 // Nombre de pestaña válido a partir del título: sin caracteres prohibidos, máximo 90 y sin repetir otra pestaña.

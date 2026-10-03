@@ -250,6 +250,10 @@ Las hojas de exámenes publicados **antes** de este cambio conservan su formato 
 
 `envio_id` es un identificador interno que evita filas repetidas si un envío se reintenta. `posible_duplicado` es `TRUE` si ya había un envío con los mismos apellidos, nombre y grupo (sin tener en cuenta tildes, mayúsculas ni espacios). No se bloquea el envío; solo se marca para que lo revises.
 
+### La pestaña «Examenes»
+
+Es el registro de tus exámenes, con el mismo diseño que las hojas de resultados: título en negrita, **activo** en verde (abierto) o rojo (cerrado), fecha de creación legible. Las columnas técnicas (las preguntas con sus soluciones y el identificador de la hoja de resultados) quedan **ocultas**; no las borres. Al publicar un examen nuevo, la pestaña se pone bonita aunque ya la tuvieras. Puedes abrir o cerrar un examen desde el panel o cambiando `activo` a mano.
+
 ### Cerrar un examen
 
 Desde **Mis exámenes → Cerrar examen**. Los alumnos que abran el enlace verán «Examen cerrado». Puedes volver a abrirlo cuando quieras.

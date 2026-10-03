@@ -14,7 +14,7 @@ const EXAM_HEADERS = [
   'id', 'titulo', 'grupo_destino', 'activo', 'codigo_acceso', 'tiempo_min',
   'barajar_preguntas', 'barajar_opciones', 'mostrar_nota', 'permitir_negativa',
   'preguntas_json', 'creado', 'control_salidas', 'salidas_permitidas', 'penalizacion',
-  'pantalla_completa'
+  'pantalla_completa', 'hoja_id'
 ];
 // Hoja de resultados (una por examen). Orden de las columnas de las hojas nuevas; las hojas de versiones
 // anteriores se leen por el nombre de la cabecera y reciben al final las columnas extra que les falten.
@@ -252,7 +252,7 @@ function submit_(p) {
     return fail_('busy', 'El servidor está ocupado. Inténtalo de nuevo en unos segundos.');
   }
   try {
-    var sheet = getResultsSheet_(exam.id, questions);
+    var sheet = getResultsSheet_(exam, questions);
     var rows = sheet.getDataRange().getValues();
     var headers = rows[0].map(String);
     var H = headerMap_(headers); // nombre de columna -> posición (desde 0)
@@ -292,7 +292,8 @@ function submit_(p) {
         duracion_min: duracion, posible_duplicado: duplicado, respuestas_json: JSON.stringify(answers),
         salidas: salidas, segundos_fuera: segundosFuera, tipo_envio: tipoEnvio, envio_id: envioId,
         motivos_salida: motivos,
-        puntos_test: result.puntosTest, puntos_total: result.puntosTotal, pegados: pegados
+        puntos_test: result.puntosTest, puntos_total: result.puntosTotal, pegados: pegados,
+        pendientes: result.abiertas // preguntas abiertas sin corregir; la nota es la del test hasta que se corrija
       };
       var openQs = questions.filter(isOpen_);
       openQs.forEach(function (q) { values[openColumns_(q, questions).resp] = openAnswers[q.id] || ''; });
@@ -302,18 +303,6 @@ function submit_(p) {
         return values[name] === undefined ? '' : values[name];
       });
       appendRowText_(sheet, row, textCols);
-      if (openQs.length) {
-        // Nota final automática: test + puntos que el profesor ponga a cada abierta (referencias de columna absolutas).
-        var lastRow = sheet.getLastRow();
-        var ptsRefs = openQs.map(function (q) { return 'RC' + (H[openColumns_(q, questions).pts] + 1); });
-        if (H.pendientes !== undefined) {
-          sheet.getRange(lastRow, H.pendientes + 1).setFormulaR1C1('=' + openQs.length + '-COUNT(' + ptsRefs.join(',') + ')');
-        }
-        // `nota` pasa a ser la nota final: test + puntos de las abiertas (mientras no corrijas, es la nota del test).
-        var inner = '(RC' + (H.puntos_test + 1) + '+SUM(' + ptsRefs.join(',') + '))/RC' + (H.puntos_total + 1) + '*10';
-        sheet.getRange(lastRow, H.nota + 1)
-          .setFormulaR1C1(exam.permitir_negativa ? '=ROUND(' + inner + ',2)' : '=ROUND(MAX(0,' + inner + '),2)');
-      }
       // Las filas quedan ordenadas por apellidos y, a igualdad, por nombre.
       if (hasApellidos && sheet.getLastRow() > 2) {
         sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length)
@@ -387,6 +376,8 @@ function createExam_(p) {
   var id;
   try {
     id = newExamId_();
+    // La hoja de resultados se llama como el examen; se guarda su identificador interno para no depender del nombre.
+    var resultsSheet = createResultsSheet_(titulo, questions);
     appendRowText_(getExamsSheet_(), [
       id,
       titulo,
@@ -403,9 +394,10 @@ function createExam_(p) {
       toBool_(p.control_salidas),
       allowedExits_(p.salidas_permitidas),
       penalizacion,
-      toBool_(p.pantalla_completa)
+      toBool_(p.pantalla_completa),
+      resultsSheet.getSheetId()
     ], [1, 3, 5, 15]);
-    getResultsSheet_(id, questions);
+    formatExamsSheet_(getExamsSheet_()); // también embellece la hoja de quien ya la tenía
     storeImages_(id, images);
   } finally {
     lock.releaseLock();
@@ -439,7 +431,7 @@ function listExams_(params) {
   if (auth) return auth;
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var exams = readExams_().map(function (ex) {
-    var sh = ss.getSheetByName('R_' + ex.id);
+    var sh = findResultsSheet_(ex);
     return {
       id: ex.id,
       titulo: ex.titulo,
@@ -468,7 +460,7 @@ function results_(p) {
   var exam = findExam_(p.examId);
   if (!exam) return fail_('not_found', 'Este examen no existe.');
   var questions = JSON.parse(exam.preguntas_json);
-  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('R_' + exam.id);
+  var sh = findResultsSheet_(exam);
   var rows = sh ? sh.getDataRange().getValues() : [];
   var H = rows.length ? headerMap_(rows[0].map(String)) : {};
   var openQs = questions.filter(isOpen_);
@@ -549,7 +541,7 @@ function grade_(p) {
     return fail_('busy', 'El servidor está ocupado. Inténtalo de nuevo en unos segundos.');
   }
   try {
-    var sh = getResultsSheet_(exam.id, questions);
+    var sh = getResultsSheet_(exam, questions);
     var rows = sh.getDataRange().getValues();
     var H = headerMap_(rows[0].map(String));
     var c = openColumns_(q, questions);
@@ -560,7 +552,11 @@ function grade_(p) {
       rows[i][H[c.pts]] = puntos === null ? '' : puntos;
       var openQs = questions.filter(isOpen_);
       var pend = openQs.filter(function (x) { var v = rows[i][H[openColumns_(x, questions).pts]]; return v === '' || v === undefined; }).length;
-      return { ok: true, puntos: puntos, pendientes: pend, nota: finalGrade_(exam, openQs, questions, rows[i], H) };
+      var nota = finalGrade_(exam, openQs, questions, rows[i], H);
+      // Se escriben valores (no fórmulas): la nota y las pendientes de la hoja siempre coinciden con el panel.
+      if (nota !== '') sh.getRange(i + 1, (H.nota_final !== undefined ? H.nota_final : H.nota) + 1).setValue(nota);
+      if (H.pendientes !== undefined) sh.getRange(i + 1, H.pendientes + 1).setValue(pend);
+      return { ok: true, puntos: puntos, pendientes: pend, nota: nota };
     }
     return fail_('not_found', 'No se ha encontrado ese envío.');
   } finally {
@@ -978,6 +974,7 @@ function getExamsSheet_() {
     sh.appendRow(EXAM_HEADERS);
     sh.setFrozenRows(1);
     setTextColumns_(sh, [1, 3, 5]);
+    formatExamsSheet_(sh);
   } else {
     ensureHeaders_(sh, EXAM_HEADERS);
   }
@@ -1068,24 +1065,101 @@ function resultHeaders_(questions) {
   return cols;
 }
 
-function getResultsSheet_(examId, questions) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var name = 'R_' + examId;
-  var sh = ss.getSheetByName(name);
-  var extra = resultHeaders_(questions);
-  if (!sh) {
-    var layout = newResultLayout_(questions);
-    var headers = layout.headers;
-    sh = ss.insertSheet(name);
-    sh.appendRow(headers);
+// Solo presentación (se puede repetir sin problema): cabecera de color, filas alternas, «activo» en verde o rojo
+// y ocultas las columnas técnicas (las preguntas con sus soluciones y el identificador de la hoja de resultados).
+function formatExamsSheet_(sh) {
+  var n = EXAM_HEADERS.length;
+  var col = function (name) { return EXAM_HEADERS.indexOf(name) + 1; };
+  var rowsMax = sh.getMaxRows();
+  try {
     sh.setFrozenRows(1);
-    formatResultsSheet_(sh, layout);
-    var textNames = RESULT_TEXT_COLUMNS.concat((questions || []).filter(isOpen_).map(function (q) { return openColumns_(q, questions).resp; }));
-    setTextColumns_(sh, textNames.map(function (nm) { return headers.indexOf(nm) + 1; }));
+    sh.setFrozenColumns(2);
+    sh.setColumnWidth(col('id'), 95);
+    sh.setColumnWidth(col('titulo'), 280);
+    sh.setColumnWidth(col('grupo_destino'), 90);
+    sh.setColumnWidth(col('codigo_acceso'), 100);
+    sh.setColumnWidth(col('creado'), 140);
+    sh.hideColumns(col('preguntas_json'), 1);
+    sh.hideColumns(col('hoja_id'), 1);
+  } catch (err) {
+    console.error(err);
+  }
+  try {
+    sh.getRange(1, 1, 1, n).setFontWeight('bold').setBackground('#1f5fbf').setFontColor('#ffffff')
+      .setHorizontalAlignment('center').setVerticalAlignment('middle').setWrap(true);
+    sh.setRowHeight(1, 38);
+    sh.getRange(1, col('titulo'), 1, 1).setHorizontalAlignment('left');
+    sh.getRange(2, 1, rowsMax - 1, n).setVerticalAlignment('middle')
+      .setBorder(true, true, true, true, true, true, '#d9dee5', SpreadsheetApp.BorderStyle.SOLID);
+    sh.getRange(2, col('activo'), rowsMax - 1, n - col('activo') + 1).setHorizontalAlignment('center');
+    sh.getRange(2, col('titulo'), rowsMax - 1, 1).setFontWeight('bold');
+    sh.getRange(2, col('creado'), rowsMax - 1, 1).setNumberFormat('dd/mm/yyyy hh:mm');
+    var letter = String.fromCharCode(64 + col('activo'));
+    var rule = function (formula, bg, fg) {
+      return SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied(formula).setBackground(bg).setFontColor(fg).setBold(true)
+        .setRanges([sh.getRange(2, col('activo'), rowsMax - 1, 1)]).build();
+    };
+    sh.setConditionalFormatRules([
+      rule('=$' + letter + '2=TRUE', '#dff3e4', '#176b34'),
+      rule('=$' + letter + '2=FALSE', '#fde2e1', '#a4262c')
+    ]);
+    var old = sh.getBandings();
+    for (var i = 0; i < old.length; i++) old[i].remove();
+    sh.getRange(2, 1, rowsMax - 1, n).applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY, false, false);
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+// Nombre de pestaña válido a partir del título: sin caracteres prohibidos, máximo 90 y sin repetir otra pestaña.
+function sheetNameFor_(title) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var base = String(title || '').replace(/[\[\]*\/\\?:]/g, ' ').replace(/\s+/g, ' ').trim().replace(/^'+|'+$/g, '').slice(0, 90).trim() || 'Examen';
+  var name = base;
+  for (var i = 2; ss.getSheetByName(name); i++) name = base + ' (' + i + ')';
+  return name;
+}
+
+// La hoja de resultados de un examen: por su identificador (sigue valiendo si la renombras) o, en los exámenes
+// anteriores, por el nombre R_<id>.
+function findResultsSheet_(exam) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (exam.hoja_id !== '' && exam.hoja_id !== undefined) {
+    var all = ss.getSheets();
+    for (var i = 0; i < all.length; i++) {
+      if (String(all[i].getSheetId()) === String(exam.hoja_id)) return all[i];
+    }
+  }
+  return ss.getSheetByName('R_' + exam.id);
+}
+
+function createResultsSheet_(title, questions) {
+  var layout = newResultLayout_(questions);
+  var headers = layout.headers;
+  var sh = SpreadsheetApp.getActiveSpreadsheet().insertSheet(sheetNameFor_(title));
+  sh.appendRow(headers);
+  sh.setFrozenRows(1);
+  formatResultsSheet_(sh, layout);
+  var textNames = RESULT_TEXT_COLUMNS.concat((questions || []).filter(isOpen_).map(function (q) { return openColumns_(q, questions).resp; }));
+  setTextColumns_(sh, textNames.map(function (nm) { return headers.indexOf(nm) + 1; }));
+  return sh;
+}
+
+// Devuelve la hoja del examen; si no existe (p. ej. se borró) la crea y anota su identificador. Usar con el lock tomado.
+function getResultsSheet_(exam, questions) {
+  var sh = findResultsSheet_(exam);
+  if (!sh) {
+    sh = createResultsSheet_(exam.titulo, questions);
+    var exams = getExamsSheet_();
+    var rows = exams.getDataRange().getValues();
+    var col = EXAM_HEADERS.indexOf('hoja_id');
+    for (var i = 1; i < rows.length; i++) {
+      if (String(rows[i][0]) === String(exam.id)) { exams.getRange(i + 1, col + 1).setValue(sh.getSheetId()); break; }
+    }
   } else {
     // Hoja de una versión anterior: se añaden al final las columnas que falten (por nombre).
     var have = headerMap_(sh.getDataRange().getValues()[0].map(String));
-    RESULT_EXTRA.concat(extra).forEach(function (nm) {
+    RESULT_EXTRA.concat(resultHeaders_(questions)).forEach(function (nm) {
       if (have[nm] === undefined) sh.getRange(1, sh.getLastColumn() + 1).setValue(nm);
     });
   }
@@ -1114,7 +1188,8 @@ function readExams_() {
       control_salidas: toBool_(r[12]),
       salidas_permitidas: allowedExits_(r[13]),
       penalizacion: storedPenalty_(r[14]),
-      pantalla_completa: toBool_(r[15])
+      pantalla_completa: toBool_(r[15]),
+      hoja_id: r[16] === '' || r[16] === undefined ? '' : String(r[16])
     });
   }
   return out;

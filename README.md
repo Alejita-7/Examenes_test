@@ -236,7 +236,7 @@ Cada salida guarda en la hoja **qué señal la provocó** (`motivos_salida`, por
 
 ### Ver resultados
 
-En **Mis exámenes** pulsa **Ver hoja de Google** para abrir la hoja `R_<id>` de ese examen, con una fila por envío:
+En **Mis exámenes** pulsa **Ver hoja de Google** para abrir la hoja de ese examen (una pestaña **con el título del examen**; si repites título, se añade « (2)»; puedes renombrarla sin problema), con una fila por envío:
 
 Las hojas **nuevas** están pensadas para leerse de un vistazo: cabecera azul, filas alternas, y esta primera parte visible:
 
@@ -249,6 +249,10 @@ El alumno rellena **Nombre** y **Apellidos** en casillas separadas, y la hoja se
 Las hojas de exámenes publicados **antes** de este cambio conservan su formato (una sola columna `nombre`): ahí los nuevos envíos se guardan como «Apellidos, Nombre» y no se reordenan. Para tener la hoja ordenada, publica el examen de nuevo.
 
 `envio_id` es un identificador interno que evita filas repetidas si un envío se reintenta. `posible_duplicado` es `TRUE` si ya había un envío con los mismos apellidos, nombre y grupo (sin tener en cuenta tildes, mayúsculas ni espacios). No se bloquea el envío; solo se marca para que lo revises.
+
+### La pestaña «Examenes»
+
+Es el registro de tus exámenes, con el mismo diseño que las hojas de resultados: título en negrita, **activo** en verde (abierto) o rojo (cerrado), fecha de creación legible. Las columnas técnicas (las preguntas con sus soluciones y el identificador de la hoja de resultados) quedan **ocultas**; no las borres. Al publicar un examen nuevo, la pestaña se pone bonita aunque ya la tuvieras. Puedes abrir o cerrar un examen desde el panel o cambiando `activo` a mano.
 
 ### Cerrar un examen
 

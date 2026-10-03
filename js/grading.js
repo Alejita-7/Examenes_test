@@ -28,12 +28,29 @@ export function formatPenalty(p) {
   return p.den === 1 ? String(p.num) : `${p.num}/${p.den}`;
 }
 
+/** Lo que vale una pregunta (1 si no se indica). */
+export function questionValue(q) {
+  const v = Number(q?.valor);
+  return Number.isFinite(v) && v > 0 ? v : 1;
+}
+
+/** Las preguntas abiertas no se corrigen solas: las evalúa el profesor en la hoja. */
+export const isOpenQuestion = (q) => q?.tipo === "abierta";
+
 /**
- * @param {{id:string, options:{id:string}[], correct:string}[]} questions
+ * Corrige la parte tipo test. Cada pregunta vale `valor` puntos (1 por defecto):
+ * acierto +valor, error −valor × penalización, en blanco 0. Las preguntas abiertas no puntúan aquí,
+ * pero su valor cuenta en el total, de modo que la nota final queda sobre 10 con todas las preguntas.
+ *
+ * @param {{id:string, valor?:number, tipo?:string, options:{id:string}[], correct:string}[]} questions
  * @param {Record<string,string|null|undefined>} answers  id de pregunta -> id de opción (o null/ausente = en blanco)
  * @param {{allowNegative?: boolean, penalty?: {num:number, den:number}|null}} [opts]
  *   penalty: fracción de punto que resta cada error; null/ausente = 1/(opciones-1) en cada pregunta
- * @returns {{aciertos:number, errores:number, blancos:number, puntos:number, nota:number}}
+ * @returns {{aciertos:number, errores:number, blancos:number, puntos:number, puntosTest:number,
+ *            puntosTestMax:number, puntosTotal:number, abiertas:number, nota:number}}
+ *   puntos = puntos del test sin recortar; puntosTest = lo mismo redondeado y, salvo nota negativa,
+ *   no menor que 0 (es lo que ve el alumno); puntosTotal = suma de los valores de TODAS las preguntas;
+ *   nota = puntos / puntosTotal × 10 (provisional si hay preguntas abiertas sin corregir).
  */
 export function gradeExam(questions, answers, opts = {}) {
   const { allowNegative = false, penalty = null } = opts;
@@ -42,9 +59,21 @@ export function gradeExam(questions, answers, opts = {}) {
   let aciertos = 0;
   let errores = 0;
   let blancos = 0;
-  let penalizacion = 0;
+  let valorAciertos = 0; // suma de los valores de las acertadas
+  let valorErrores = 0; // suma de los valores de las falladas
+  let penalizacion = 0; // con la penalización automática: Σ valor / (opciones − 1)
+  let puntosTestMax = 0;
+  let puntosTotal = 0;
+  let abiertas = 0;
 
   for (const q of questions) {
+    const valor = questionValue(q);
+    puntosTotal += valor;
+    if (isOpenQuestion(q)) {
+      abiertas++;
+      continue;
+    }
+    puntosTestMax += valor;
     const given = answers?.[q.id];
     if (given === undefined || given === null || given === "") {
       blancos++;
@@ -55,18 +84,24 @@ export function gradeExam(questions, answers, opts = {}) {
     }
     if (given === q.correct) {
       aciertos++;
+      valorAciertos += valor;
     } else {
       errores++;
-      if (!penalty) penalizacion += 1 / (q.options.length - 1);
+      valorErrores += valor;
+      if (!penalty) penalizacion += valor / (q.options.length - 1);
     }
   }
 
-  // Con penalización propia se calcula con enteros: (aciertos·den − errores·num) / den.
-  const puntos = penalty ? (aciertos * penalty.den - errores * penalty.num) / penalty.den : aciertos - penalizacion;
-  let nota = (puntos / questions.length) * 10;
+  // Con penalización propia: (Σacierto·den − Σerror·num) / den.
+  const puntos = penalty ? (valorAciertos * penalty.den - valorErrores * penalty.num) / penalty.den : valorAciertos - penalizacion;
+  const round2 = (x) => {
+    const r = Math.round((x + Number.EPSILON * Math.sign(x)) * 100) / 100;
+    return r === 0 ? 0 : r; // evita -0
+  };
+  let nota = (puntos / puntosTotal) * 10;
   if (!allowNegative && nota < 0) nota = 0;
-  nota = Math.round((nota + Number.EPSILON * Math.sign(nota)) * 100) / 100;
-  if (nota === 0) nota = 0; // evita -0
+  nota = round2(nota);
+  const puntosTest = round2(!allowNegative && puntos < 0 ? 0 : puntos);
 
-  return { aciertos, errores, blancos, puntos, nota };
+  return { aciertos, errores, blancos, puntos, puntosTest, puntosTestMax: round2(puntosTestMax), puntosTotal: round2(puntosTotal), abiertas, nota };
 }

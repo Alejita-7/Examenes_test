@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { gradeExam, parsePenalty, formatPenalty } from "../js/grading.js";
+import { gradeExam, parsePenalty, formatPenalty, questionValue, isOpenQuestion } from "../js/grading.js";
 
 const opts = (k) => Array.from({ length: k }, (_, i) => ({ id: "abcde"[i] }));
 // n preguntas de k opciones, correcta siempre "a"
@@ -11,7 +11,7 @@ const answersAll = (qs, v) => Object.fromEntries(qs.map((q) => [q.id, v]));
 test("todo bien = 10", () => {
   const qs = make(10, 4);
   const r = gradeExam(qs, answersAll(qs, "a"));
-  assert.deepEqual(r, { aciertos: 10, errores: 0, blancos: 0, puntos: 10, nota: 10 });
+  assert.deepEqual({ a: r.aciertos, e: r.errores, b: r.blancos, p: r.puntos, n: r.nota }, { a: 10, e: 0, b: 0, p: 10, n: 10 });
 });
 
 test("todo mal con 4 opciones: recorta a 0", () => {
@@ -30,7 +30,7 @@ test("todo mal con permitir_negativa: -3.33", () => {
 test("todo en blanco = 0 (sin penalización)", () => {
   const qs = make(10, 4);
   const r = gradeExam(qs, {});
-  assert.deepEqual(r, { aciertos: 0, errores: 0, blancos: 10, puntos: 0, nota: 0 });
+  assert.deepEqual({ a: r.aciertos, e: r.errores, b: r.blancos, p: r.puntos, n: r.nota }, { a: 0, e: 0, b: 10, p: 0, n: 0 });
   assert.equal(gradeExam(qs, answersAll(qs, null)).blancos, 10);
 });
 
@@ -151,4 +151,76 @@ test("la nota negativa sigue recortándose a 0 con penalización propia", () => 
   const all = { q1: "b", q2: "b", q3: "b", q4: "b" };
   assert.equal(gradeExam(qs, all, { penalty: parsePenalty("1/2") }).nota, 0);
   assert.equal(gradeExam(qs, all, { penalty: parsePenalty("1/2"), allowNegative: true }).nota, -5);
+});
+
+/* ---------------- valor de cada pregunta y preguntas abiertas ---------------- */
+
+const withValue = (qs, valores) => qs.map((q, i) => ({ ...q, valor: valores[i] }));
+
+test("sin valor ni tipo (examen anterior) todo se corrige como siempre", () => {
+  const qs = make(10, 4);
+  const r = gradeExam(qs, { q1: "a", q2: "a", q3: "b" });
+  assert.equal(r.puntosTotal, 10);
+  assert.equal(r.abiertas, 0);
+  assert.equal(r.puntosTestMax, 10);
+  assert.equal(questionValue({}), 1);
+  assert.equal(isOpenQuestion({}), false);
+});
+
+test("valores distintos: un acierto vale lo que vale la pregunta; la nota sigue sobre 10", () => {
+  // 4 preguntas de 4 opciones valiendo 1, 1, 2 y 6 (total 10)
+  const qs = withValue(make(4, 4), [1, 1, 2, 6]);
+  assert.equal(gradeExam(qs, { q1: "a", q2: "a", q3: "a", q4: "a" }).nota, 10);
+  assert.equal(gradeExam(qs, { q4: "a" }).nota, 6);
+  assert.equal(gradeExam(qs, { q3: "a" }).nota, 2);
+});
+
+test("el error resta la penalización multiplicada por el valor de la pregunta", () => {
+  const qs = withValue(make(2, 4), [3, 1]); // total 4
+  const r = gradeExam(qs, { q1: "b", q2: "a" }, { penalty: parsePenalty("1/3"), allowNegative: true });
+  assert.equal(r.puntos, 0); // 1 − 3·(1/3)
+  const auto = gradeExam(qs, { q1: "b", q2: "a" }, { allowNegative: true });
+  assert.equal(auto.puntos, 0); // la automática (1/3 con 4 opciones) da lo mismo
+  const half = gradeExam(qs, { q1: "b", q2: "a" }, { penalty: parsePenalty("1/2"), allowNegative: true });
+  assert.equal(half.puntos, -0.5); // 1 − 3·(1/2)
+});
+
+test("las preguntas abiertas no puntúan en el test pero su valor cuenta en el total", () => {
+  const test = withValue(make(4, 4), [1, 1, 1, 1]);
+  const abiertas = [
+    { id: "q5", tipo: "abierta", options: [], correct: null, valor: 3 },
+    { id: "q6", tipo: "abierta", options: [], correct: null, valor: 3 },
+  ];
+  const qs = [...test, ...abiertas]; // total 10: 4 de test + 6 de abiertas
+  const r = gradeExam(qs, { q1: "a", q2: "a", q3: "a", q4: "a" });
+  assert.equal(r.puntosTestMax, 4);
+  assert.equal(r.puntosTotal, 10);
+  assert.equal(r.abiertas, 2);
+  assert.equal(r.puntosTest, 4);
+  assert.equal(r.nota, 4); // nota provisional: solo el test, sobre 10
+  assert.equal(r.aciertos + r.errores + r.blancos, 4, "las abiertas no cuentan como aciertos, errores ni blancos");
+});
+
+test("las respuestas de una abierta se ignoran en la corrección y no dan error", () => {
+  const qs = [...make(2, 4), { id: "q3", tipo: "abierta", options: [], correct: null, valor: 2 }];
+  assert.doesNotThrow(() => gradeExam(qs, { q1: "a", q3: "cualquier cosa" }));
+});
+
+test("puntosTest nunca es negativo salvo que se permita", () => {
+  const qs = make(4, 4);
+  const mal = { q1: "b", q2: "b", q3: "b", q4: "b" };
+  assert.equal(gradeExam(qs, mal).puntosTest, 0);
+  assert.equal(gradeExam(qs, mal, { allowNegative: true }).puntosTest, -1.33);
+});
+
+test("solo preguntas abiertas: nota 0 hasta que se corrijan", () => {
+  const qs = [{ id: "q1", tipo: "abierta", options: [], correct: null, valor: 5 }];
+  const r = gradeExam(qs, {});
+  assert.deepEqual({ t: r.puntosTestMax, total: r.puntosTotal, n: r.nota, ab: r.abiertas }, { t: 0, total: 5, n: 0, ab: 1 });
+});
+
+test("valores decimales: 0,5 y 1,5", () => {
+  const qs = withValue(make(2, 4), [0.5, 1.5]); // total 2
+  assert.equal(gradeExam(qs, { q1: "a", q2: "a" }).nota, 10);
+  assert.equal(gradeExam(qs, { q2: "a" }).nota, 7.5);
 });

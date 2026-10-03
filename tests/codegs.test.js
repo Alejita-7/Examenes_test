@@ -26,12 +26,16 @@ test("gradeExam_ de Code.gs coincide con js/grading.js en 2000 casos aleatorios"
     const qs = Array.from({ length: nq }, (_, i) => {
       const k = 2 + Math.floor(rnd() * 5);
       const ids = "abcdef".slice(0, k).split("");
-      return { id: `q${i + 1}`, options: ids.map((id) => ({ id })), correct: ids[Math.floor(rnd() * k)] };
+      const q = { id: `q${i + 1}`, options: ids.map((id) => ({ id })), correct: ids[Math.floor(rnd() * k)] };
+      const r = rnd();
+      if (r < 0.2) { q.tipo = "abierta"; q.options = []; q.correct = null; }
+      if (r > 0.4) q.valor = Math.round((0.25 + rnd() * 4) * 4) / 4;
+      return q;
     });
     const ans = {};
     for (const q of qs) {
       const r = rnd();
-      if (r < 0.25) continue;
+      if (r < 0.25 || q.tipo === "abierta") continue;
       ans[q.id] = r < 0.6 ? q.correct : q.options[Math.floor(rnd() * q.options.length)].id;
     }
     const allowNegative = rnd() < 0.5;
@@ -247,7 +251,7 @@ test("hojas de resultados antiguas reciben las columnas nuevas por nombre", () =
   sheet.rows = [["fecha", "nombre", "grupo", "aciertos", "errores", "blancos", "nota", "duracion_min", "posible_duplicado", "respuestas_json"]];
   assert.equal(env.post({ action: "submit", examId: id, nombre: "Ana", apellidos: "López", grupo: "B", respuestas: {}, envioId: "x1" }).ok, true);
   const h = sheet.rows[0];
-  assert.deepEqual(plain(h.slice(10)), ["salidas", "segundos_fuera", "tipo_envio", "envio_id", "motivos_salida"]);
+  assert.deepEqual(plain(h.slice(10)), ["salidas", "segundos_fuera", "tipo_envio", "envio_id", "motivos_salida", "puntos_test", "puntos_total", "pegados"]);
   assert.ok(!h.includes("apellidos"), "no se inserta una columna en medio de una hoja ya en uso");
   assert.equal(cell(sheet.rows, 1, "nombre"), "López, Ana", "en hojas anteriores el nombre se guarda como Apellidos, Nombre");
 });
@@ -465,7 +469,7 @@ test("las hojas anteriores (sin apellidos) siguen funcionando y no se reordenan"
   submitAs(env, id, "Pedro", "Álvarez");
   const rows = sheet.rows;
   assert.deepEqual([cell(rows, 1, "nombre"), cell(rows, 2, "nombre")], ["Zapata, Marta", "Álvarez, Pedro"], "orden de llegada");
-  assert.equal(rows[0].length, 15, "no se añaden columnas");
+  assert.equal(rows[0].length, 18, "solo se añaden columnas al final (puntos_test, puntos_total, pegados)");
 });
 
 /* ------------------------- imágenes en los enunciados ------------------------- */
@@ -479,7 +483,7 @@ const publishImg = (env, extra = {}) =>
 
 test("version: el panel puede saber qué funciones tiene el script", () => {
   const env = makeEnv();
-  assert.deepEqual(plain(env.get({ action: "version" })), { ok: true, funciones: ["imagenes"] });
+  assert.deepEqual(plain(env.get({ action: "version" })), { ok: true, funciones: ["imagenes", "abiertas"] });
 });
 
 test("imágenes: se guardan troceadas, se devuelven al alumno y las preguntas no filtran la solución", () => {

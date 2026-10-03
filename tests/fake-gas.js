@@ -17,6 +17,7 @@ class FakeSheet {
   getDataRange() { return { getValues: () => this.rows.map((r) => [...r]) }; }
   getRange(row, col, nRows = 1, nCols = 1) {
     return {
+      setFormulaR1C1: (formula) => { this.rows[row - 1][col - 1] = formula; },
       setValue: (v) => { this.rows[row - 1][col - 1] = this.textCells.has(`${row},${col}`) ? v : coerce(v); },
       setValues: (vals) => {
         vals.forEach((r, i) => {

@@ -7,6 +7,7 @@ import { parsePenalty, questionValue, isOpenQuestion } from "./grading.js";
 import { collectImageRefs, matchImage, MAX_IMAGES, MAX_TOTAL_IMAGE_CHARS } from "./images.js";
 import { prepareImage } from "./image-encode.js";
 import { richNodes } from "./rich.js";
+import { showCorrection, exportNotes } from "./correction.js";
 
 const TOKEN_KEY = "admin_token";
 const WARN_CHARS = 45000;
@@ -178,6 +179,17 @@ function showPanel(initialExams) {
         });
         const copy = h("button", { class: "btn secondary small", type: "button" }, "Copiar enlace");
         copy.addEventListener("click", () => copyText(link, copy));
+        const exportBtn = h("button", { class: "btn secondary small", type: "button" }, "Exportar notas (CSV)");
+        exportBtn.addEventListener("click", async () => {
+          exportBtn.disabled = true;
+          try {
+            const err = await exportNotes(token, ex);
+            if (err) alert(err);
+          } catch (e) {
+            alert(errorText(e));
+          }
+          exportBtn.disabled = false;
+        });
         return h(
           "div",
           { class: "exam-item" },
@@ -195,7 +207,15 @@ function showPanel(initialExams) {
               .filter(Boolean)
               .join(" · ")
           ),
-          h("div", { class: "actions" }, toggle, copy, h("a", { class: "btn secondary small", href: ex.results_url, target: "_blank", rel: "noopener" }, "Ver resultados"))
+          h(
+            "div",
+            { class: "actions" },
+            ex.n_abiertas ? h("button", { class: "btn small", type: "button", onclick: () => showCorrection(app, { token, ex, onBack: main, onUnauthorized }) }, "Corregir abiertas") : null,
+            exportBtn,
+            toggle,
+            copy,
+            h("a", { class: "btn secondary small", href: ex.results_url, target: "_blank", rel: "noopener" }, "Ver hoja de Google")
+          )
         );
       })
     );

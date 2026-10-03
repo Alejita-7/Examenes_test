@@ -48,14 +48,15 @@ test("envío con abierta: texto en la hoja, fórmulas de nota final y el alumno 
   assert.equal(cell(rows, 1, "puntos_total"), 6);
   const P = col(rows, pts) + 1;
   assert.equal(cell(rows, 1, "pendientes"), "=1-COUNT(RC" + P + ")");
-  assert.ok(cell(rows, 1, "nota_final").startsWith("=ROUND(MAX(0,(RC"), cell(rows, 1, "nota_final"));
+  assert.ok(cell(rows, 1, "nota").startsWith("=ROUND(MAX(0,(RC"), cell(rows, 1, "nota"));
+  assert.ok(!rows[0].includes("nota_final"), "solo hay una columna de nota");
 });
 
 test("con permitir_negativa la nota final no se recorta a 0", () => {
   const env = makeEnv();
   const { id } = publish(env, { permitir_negativa: true });
   env.post(base(id, { respuestas: { q1: "b" }, abiertas: {} }));
-  assert.ok(!cell(env.sheets.get(`R_${id}`).rows, 1, "nota_final").includes("MAX(0"));
+  assert.ok(!cell(env.sheets.get(`R_${id}`).rows, 1, "nota").includes("MAX(0"));
 });
 
 test("validación: id de abierta desconocido, test dentro de abiertas, demasiado largo", () => {
@@ -77,7 +78,7 @@ test("un examen solo de test y sin valores se comporta como siempre (nota sobre 
   const s = env.post(base(r.id, { respuestas: { q1: "a" } }));
   assert.equal(s.nota, 10);
   const rows = env.sheets.get(`R_${r.id}`).rows;
-  assert.ok(!rows[0].includes("nota_final"));
+  assert.ok(!rows[0].includes("pendientes"));
 });
 
 test("validación de preguntas: valor y tipo", () => {
@@ -101,4 +102,46 @@ test("varias abiertas y orden por apellidos con columnas extra", () => {
   assert.deepEqual([cell(rows, 1, "apellidos"), cell(rows, 2, "apellidos")], ["Álvarez", "Zapata"]);
   assert.equal(cell(rows, 1, rows[0].find((h) => h.startsWith("Q1") && h.endsWith("respuesta"))), "Pedro1");
   assert.ok(cell(rows, 1, "pendientes").startsWith("=2-COUNT("));
+});
+
+test("hoja nueva: lo importante primero y las columnas técnicas ocultas al final", () => {
+  const env = makeEnv();
+  const { id } = publish(env);
+  const sh = env.sheets.get(`R_${id}`);
+  assert.deepEqual(plain(sh.rows[0].slice(0, 5)), ["apellidos", "nombre", "grupo", "nota", "pendientes"]);
+  assert.equal(sh.rows[0].at(-1), "respuestas_json");
+  const [first, count] = sh.hidden;
+  assert.equal(first + count - 1, sh.rows[0].length, "las ocultas llegan hasta la última");
+  assert.ok(sh.rows[0].slice(first - 1).includes("envio_id"));
+  assert.ok(!sh.rows[0].slice(0, first - 1).includes("envio_id"));
+});
+
+test("results: devuelve respuestas abiertas y la nota calculada; exige token", () => {
+  const env = makeEnv();
+  const { id } = publish(env);
+  env.post(base(id, { respuestas: { q1: "a", q2: "b" }, abiertas: { q3: "Respuesta larga" }, pegados: 1, envioId: "e1" }));
+  assert.equal(env.post({ action: "results", token: "mal", examId: id }).error, "unauthorized");
+  const r = env.post({ action: "results", token: "secreto", examId: id });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.deepEqual(plain(r.exam.preguntas.map((q) => [q.tipo, q.valor])), [["test", 2], ["test", 1], ["abierta", 3]]);
+  const row = r.rows[0];
+  assert.deepEqual([row.apellidos, row.pegados, row.pendientes, row.abiertas.q3.texto, row.abiertas.q3.puntos], ["López", 1, 1, "Respuesta larga", null]);
+  assert.equal(row.nota, 5, "test 3 de 6 puntos, abierta sin corregir");
+});
+
+test("grade: guarda los puntos de una abierta, recalcula la nota y valida", () => {
+  const env = makeEnv();
+  const { id } = publish(env);
+  env.post(base(id, { respuestas: { q1: "a", q2: "b" }, abiertas: { q3: "x" }, envioId: "e1" }));
+  const g = (puntos, extra = {}) => env.post({ action: "grade", token: "secreto", examId: id, envioId: "e1", qid: "q3", puntos, ...extra });
+  const ok = g(2);
+  assert.deepEqual(plain([ok.ok, ok.puntos, ok.pendientes, ok.nota]), [true, 2, 0, 8.33]);
+  assert.equal(env.post({ action: "results", token: "secreto", examId: id }).rows[0].abiertas.q3.puntos, 2);
+  assert.equal(g(4).error, "invalid_grade", "más del máximo");
+  assert.equal(g(-1).error, "invalid_grade");
+  assert.equal(g(1, { qid: "q1" }).error, "invalid_grade", "no es abierta");
+  assert.equal(g(1, { envioId: "nada" }).error, "not_found");
+  assert.equal(g(1, { token: "mal" }).error, "unauthorized");
+  const cleared = g(null);
+  assert.deepEqual(plain([cleared.ok, cleared.pendientes, cleared.nota]), [true, 1, 5]);
 });

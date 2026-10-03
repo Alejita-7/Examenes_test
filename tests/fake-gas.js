@@ -17,6 +17,7 @@ class FakeSheet {
   getDataRange() { return { getValues: () => this.rows.map((r) => [...r]) }; }
   getRange(row, col, nRows = 1, nCols = 1) {
     return {
+      setFontWeight() { return this; }, setBackground() { return this; }, setFontColor() { return this; }, setHorizontalAlignment() { return this; },
       setFormulaR1C1: (formula) => { this.rows[row - 1][col - 1] = formula; },
       setValue: (v) => { this.rows[row - 1][col - 1] = this.textCells.has(`${row},${col}`) ? v : coerce(v); },
       setValues: (vals) => {
@@ -54,6 +55,9 @@ class FakeSheet {
   getMaxRows() { return 1000; }
   getSheetId() { return this.id; }
   setFrozenRows() {}
+  setFrozenColumns() {}
+  setColumnWidth() {}
+  hideColumns(c, n) { this.hidden = [c, n]; }
 }
 
 export function makeEnv(token = "secreto", { uuid: uuidFn } = {}) {

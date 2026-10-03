@@ -394,7 +394,7 @@ test("las hojas nuevas separan apellidos y nombre", () => {
   const id = publish(env);
   assert.equal(submitAs(env, id, "  Ana ", " López   Pérez ").ok, true);
   const rows = env.sheets.get(`R_${id}`).rows;
-  assert.deepEqual(plain(rows[0].slice(0, 4)), ["fecha", "apellidos", "nombre", "grupo"]);
+  assert.deepEqual(plain(rows[0].slice(0, 4)), ["apellidos", "nombre", "grupo", "nota"]);
   assert.equal(cell(rows, 1, "apellidos"), "López Pérez");
   assert.equal(cell(rows, 1, "nombre"), "Ana");
 });
@@ -483,7 +483,7 @@ const publishImg = (env, extra = {}) =>
 
 test("version: el panel puede saber qué funciones tiene el script", () => {
   const env = makeEnv();
-  assert.deepEqual(plain(env.get({ action: "version" })), { ok: true, funciones: ["imagenes", "abiertas"] });
+  assert.deepEqual(plain(env.get({ action: "version" })), { ok: true, funciones: ["imagenes", "abiertas", "correccion"] });
 });
 
 test("imágenes: se guardan troceadas, se devuelven al alumno y las preguntas no filtran la solución", () => {

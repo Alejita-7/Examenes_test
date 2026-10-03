@@ -115,12 +115,11 @@ Escribe las preguntas en un archivo de texto con este formato (la respuesta corr
 
 **La penalización escala con el valor**: un error en una pregunta de 2 puntos resta el doble que en una de 1 (con la penalización 1/3, resta 2/3 de punto).
 
-**Corregir las abiertas (en tu hoja de Google).** En `R_<id>` cada pregunta abierta añade dos columnas: `Q3 … respuesta` (lo que escribió el alumno) y `Q3 … puntos (máx 3)` (la rellenas tú, de 0 al máximo). Además:
+**Corregir las abiertas (en el panel, no en la hoja).** En «Mis exámenes», el examen con preguntas abiertas tiene el botón **Corregir abiertas**. Se corrige **pregunta por pregunta**: arriba eliges la pregunta (con cuántas llevas corregidas), y debajo ves la respuesta de cada alumno en una caja grande y legible, con su grupo y, si los hubo, los intentos de pegar. Escribes los puntos (de 0 al máximo; acepta coma decimal) o pulsas **0**, **½** o **Máximo**, y se guardan solos al pulsar Intro o salir del campo; Intro salta al siguiente alumno. «Mostrar solo las sin corregir» te deja ver lo que falta.
 
-- `puntos_test`: puntos conseguidos en el test; `puntos_total`: suma de todos los valores.
-- `pendientes`: cuántas abiertas te quedan por puntuar en esa fila.
-- `nota_final`: se calcula sola con una fórmula `(puntos_test + tus puntos) / puntos_total × 10` en cuanto rellenas las abiertas.
-- La columna `nota` es **provisional** (solo cuenta el test; las abiertas valen 0 hasta que las corrijas): usa `nota_final`.
+La hoja de Google guarda los puntos, y la **nota final** de cada alumno (columna `nota`) se actualiza sola: test + puntos de las abiertas, sobre 10. Mientras no corrijas, `nota` es solo la del test y la columna `pendientes` sale en ámbar.
+
+**Exportar las notas.** El botón **Exportar notas (CSV)** de cada examen descarga una tabla limpia (apellidos, nombre, grupo, nota final, aciertos, errores, en blanco, salidas, segundos fuera, intentos de pegar), ordenada por apellidos y lista para abrir en Excel en español (separador `;`, decimales con coma).
 
 **Qué ve el alumno.** Solo la parte del test: «Parte tipo test: X sobre Y puntos» y el aviso de que las abiertas las corrige el profesor. Si quitas «Mostrar la nota al alumno», no ve nada.
 
@@ -237,11 +236,13 @@ Cada salida guarda en la hoja **qué señal la provocó** (`motivos_salida`, por
 
 ### Ver resultados
 
-En **Mis exámenes** pulsa **Ver resultados** para abrir la hoja `R_<id>` de ese examen, con una fila por envío:
+En **Mis exámenes** pulsa **Ver hoja de Google** para abrir la hoja `R_<id>` de ese examen, con una fila por envío:
 
-`fecha | apellidos | nombre | grupo | aciertos | errores | blancos | nota | duracion_min | posible_duplicado | respuestas_json | salidas | segundos_fuera | tipo_envio | envio_id | motivos_salida | puntos_test | puntos_total | pegados`
+Las hojas **nuevas** están pensadas para leerse de un vistazo: cabecera azul, filas alternas, y esta primera parte visible:
 
-Si el examen tiene preguntas abiertas, al final se añaden sus columnas de respuesta y puntos, `pendientes` y `nota_final` (ver «Puntos por pregunta y preguntas abiertas»).
+`apellidos | nombre | grupo | nota | (pendientes) | aciertos | errores | blancos | salidas | segundos_fuera | pegados | duracion_min | fecha | posible_duplicado`
+
+La **nota** sale en verde (aprobado) o rojo; `pendientes` (preguntas abiertas sin corregir), `salidas`, `segundos_fuera` y `pegados` se marcan en color cuando son mayores que 0. Después van **ocultas** las columnas técnicas (puntos del test, respuestas y puntos de las abiertas, `tipo_envio`, `envio_id`, `motivos_salida`, `respuestas_json`); si las necesitas, selecciona las columnas vecinas y elige «Mostrar columnas». Las hojas de exámenes anteriores conservan su formato.
 
 El alumno rellena **Nombre** y **Apellidos** en casillas separadas, y la hoja se mantiene **ordenada alfabéticamente por apellidos** (y, si coinciden, por nombre; sin distinguir tildes ni mayúsculas) cada vez que llega un envío.
 
@@ -329,6 +330,7 @@ css/styles.css             Estilos (claro y oscuro)
 js/config.js               URL del Apps Script
 js/api.js                  Llamadas al Apps Script (POST como text/plain, sin preflight CORS)
 js/student.js, admin.js    Lógica de cada página
+js/correction.js           Pantalla de corrección de abiertas y exportación CSV
 js/gift.js                 Parser GIFT: [valor=N] y preguntas abiertas {} (función pura)
 js/grading.js              Corrección ponderada y penalización fraccionaria (pura; replicada en Code.gs)
 js/images.js               Citas de imágenes ![alt](archivo.png) y límites (puro; réplica parcial en Code.gs)

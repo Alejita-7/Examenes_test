@@ -131,4 +131,6 @@ Anota el mensaje exacto que aparece, la hora y si ocurrió en ordenador o móvil
 - [ ] Con un `Code.gs` antiguo el panel **no publica** y avisa de que hay que actualizar el script.
 - [ ] El alumno ve un cuadro de texto en la abierta; al pegar (Ctrl+V / mantener pulsado → Pegar) no entra nada y en la hoja aparece `pegados` ≥ 1.
 - [ ] Tras enviar, el alumno ve «Parte tipo test: X sobre Y puntos» y que las abiertas las corrige el profesor, sin nota final.
-- [ ] En `R_<id>`: columna `Q… respuesta` con el texto, `Q… puntos (máx 3)` vacía, `pendientes` = 1. Escribe 2 en los puntos de la abierta: `pendientes` pasa a 0 y `nota_final` = (puntos_test + 2) / 6 × 10.
+- [ ] En «Mis exámenes» aparece **Corregir abiertas**. Se ven las respuestas en cajas legibles; escribe 2 en una (Intro): sale «Guardado ✓» y el progreso sube.
+- [ ] En `R_<id>`: la hoja se ve limpia (cabecera azul, filas alternas), `nota` se actualiza sola con la corrección, `pendientes` baja a 0 y las columnas técnicas están ocultas (selecciona las vecinas → «Mostrar columnas»).
+- [ ] **Exportar notas (CSV)** descarga un archivo que abre bien en Excel (acentos, coma decimal).

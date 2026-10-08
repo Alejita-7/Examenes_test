@@ -619,14 +619,13 @@ function renderExam(session) {
 
   /*
    * ¿Sigue el alumno en la pantalla del examen? La decisión la toma js/watch.js a partir de varias señales
-   * (página oculta, foco, ventana reducida, pantalla completa, ratón). Aquí solo se recogen las señales.
+   * (página oculta, foco, ventana reducida, pantalla completa). Aquí solo se recogen las señales.
    */
   // En ordenadores salir de la pantalla completa (Esc) no es un gesto natural: margen más corto que en tabletas.
   const watcher = createWatcher(window.matchMedia?.("(pointer: fine)").matches ? { grace: { fullscreenLost: 1500 } } : {});
   let wasReduced = false;
   let blurred = false;
   let pageHidden = false;
-  let pointerOut = false;
   let focusSeen = false; // hasFocus() solo cuenta si alguna vez ha sido true
   let fullscreenSeen = false; // la pérdida de pantalla completa solo cuenta si estuvo en ella
   let watchTimer = null;
@@ -641,13 +640,13 @@ function renderExam(session) {
       screenWidth: window.screen?.width,
       screenHeight: window.screen?.height,
       coarse: window.matchMedia?.("(pointer: coarse)").matches ?? false,
+      typing: Boolean(document.activeElement?.matches?.("textarea, input, [contenteditable]")),
       wasReduced,
     });
     return {
       hidden: document.hidden || pageHidden,
       blurred,
       noFocus: focusSeen && !document.hasFocus(),
-      pointerOut,
       reduced: wasReduced && !settling,
       fullscreenLost: fsActive && fullscreenSeen && !fsElement() && !settling,
       needsFullscreen: fsActive && !fsState.failed && !fsElement(),
@@ -672,11 +671,9 @@ function renderExam(session) {
     window.addEventListener("orientationchange", evaluateAway);
     document.addEventListener("fullscreenchange", evaluateAway);
     document.addEventListener("webkitfullscreenchange", evaluateAway);
-    if (window.matchMedia?.("(pointer: fine)").matches) {
-      // Ordenador: el ratón que sale de la página (otra ventana, otro monitor) y no vuelve en 2 s.
-      document.documentElement.addEventListener("mouseleave", () => { pointerOut = true; });
-      document.documentElement.addEventListener("mouseenter", () => { pointerOut = false; evaluateAway(); });
-    }
+    // El teclado en pantalla aparece y desaparece al entrar o salir de un cuadro de texto.
+    document.addEventListener("focusin", evaluateAway);
+    document.addEventListener("focusout", () => setTimeout(evaluateAway, 0));
     // Un toque en cualquier parte devuelve la pantalla completa sin que el alumno tenga que buscar nada:
     // así los gestos naturales de la tableta que la quitan no cuestan una salida.
     document.addEventListener(

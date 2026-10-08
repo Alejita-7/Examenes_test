@@ -231,7 +231,7 @@ La nota se calcula con normalidad: la app **no pone un 0 automático**. Las colu
 |---|---|---|
 | Página oculta | Otra pestaña, otra app (cuando cubre todo), pantalla bloqueada | al instante en ordenadores; 2 s en tabletas (al desplazarse con el dedo desde el borde, el iPad activa a veces el Dock o la multitarea un instante) |
 | Ventana reducida | Solo en tabletas: pantalla dividida, Slide Over o Stage Manager que reducen la ventana. No cuenta mientras el alumno escribe en un cuadro de texto (el teclado en pantalla también encoge la ventana) ni al ampliar con dos dedos | 1,5 s |
-| Ventana sin foco | Hacer clic en otra ventana o app | 2 s |
+| Ventana sin foco | Hacer clic en otra ventana o app. En tabletas no cuenta durante 3 s al mostrar u ocultar el teclado, y se anula en cuanto el alumno toca o escribe en el examen | 2 s |
 | Salir de la pantalla completa | **Solo si marcas «Exigir pantalla completa»** al publicar (opcional, desactivada por defecto). Se pide pantalla completa al empezar; si el alumno sale de ella, el examen se oculta y un **toque** en cualquier parte (o el botón) la restaura | 5 s en tabletas, 1,5 s en ordenadores |
 
 La pantalla completa es opcional porque su comportamiento depende mucho del navegador y del dispositivo. Sin ella, la vigilancia sigue funcionando con las demás señales: la pantalla dividida se detecta por el tamaño de la ventana.

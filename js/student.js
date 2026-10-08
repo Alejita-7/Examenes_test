@@ -1,6 +1,6 @@
 // Página del alumno (index.html?e=ID). Todo el contenido del examen se pinta con
 // textContent: nunca se inserta HTML procedente del servidor.
-import { fetchExam, submitExam, beaconSubmit, NetworkError, ConfigError } from "./api.js";
+import { fetchExam, submitExam, fetchReview, beaconSubmit, NetworkError, ConfigError } from "./api.js";
 import { h } from "./dom.js";
 import { isReducedWindow } from "./presence.js";
 import { createWatcher } from "./watch.js";
@@ -54,6 +54,15 @@ const store = {
 
 const progressKey = (nombre, apellidos, grupo) => `examen:${examId}:${normalize(apellidos)}|${normalize(nombre)}|${normalize(grupo)}`;
 const lastKey = () => `examen:${examId}:ultimo`;
+// Envíos hechos desde este dispositivo: su identificador permite ver la revisión cuando el profesor la publique.
+const sentKey = () => `examen:${examId}:enviados`;
+const MAX_SENT = 20;
+
+function rememberSend(entry) {
+  const list = (Array.isArray(loadJson(sentKey())) ? loadJson(sentKey()) : []).filter((e) => e?.envioId !== entry.envioId);
+  list.unshift(entry);
+  store.set(sentKey(), JSON.stringify(list.slice(0, MAX_SENT)));
+}
 
 function loadJson(key) {
   try {
@@ -535,6 +544,7 @@ function renderExam(session) {
     releaseScreen();
     store.remove(key);
     store.remove(lastKey());
+    rememberSend({ envioId: progress.envioId, nombre: who.nombre, apellidos: who.apellidos });
     showDone(res, motivo);
   }
 
@@ -795,7 +805,121 @@ function showDone(res, motivo = "manual") {
             h("div", { class: "big-result" }, `${formatNumber(res.nota)} / 10`),
             h("p", {}, `Aciertos: ${res.aciertos} · Errores: ${res.errores} · En blanco: ${res.blancos}`),
           ]
-        : h("p", { class: "muted" }, "Tu profesor te comunicará la nota.")
+        : h("p", { class: "muted" }, "Tu profesor te comunicará la nota."),
+      h("p", { class: "muted small" }, "Cuando tu profesor publique la revisión, podrás ver tus fallos abriendo este mismo enlace en este dispositivo.")
+    )
+  );
+}
+
+/* ------------------------------- revisión -------------------------------- */
+
+// Si este dispositivo envió el examen y el profesor ha publicado la revisión, se muestra en lugar del examen.
+// Devuelve true si la ha mostrado. Ante cualquier error se sigue con la página normal.
+async function tryReview() {
+  const sent = loadJson(sentKey());
+  if (!Array.isArray(sent) || !sent.length) return false;
+  const found = [];
+  for (const entry of sent) {
+    if (typeof entry?.envioId !== "string") continue;
+    let res;
+    try {
+      res = await fetchReview(examId, entry.envioId);
+    } catch {
+      return false;
+    }
+    if (res.ok) found.push(res.review);
+    else if (res.error === "review_closed" || res.error === "not_found") return false; // vale para todos los envíos
+  }
+  if (!found.length) return false;
+  if (found.length === 1) showReview(found[0]);
+  else showReviewPicker(found);
+  return true;
+}
+
+// Dispositivo compartido: varios alumnos enviaron desde aquí; cada uno elige el suyo.
+function showReviewPicker(reviews) {
+  document.title = reviews[0].titulo;
+  render(
+    h(
+      "div",
+      { class: "card" },
+      h("h1", {}, reviews[0].titulo),
+      h("p", {}, "Desde este dispositivo se ha enviado el examen varias veces. Elige el tuyo:"),
+      h(
+        "div",
+        { class: "actions" },
+        reviews.map((r) => h("button", { type: "button", class: "btn secondary", onclick: () => showReview(r, () => showReviewPicker(reviews)) }, `${r.nombre} ${r.apellidos}`.trim()))
+      )
+    )
+  );
+}
+
+function showReview(r, onBack = null) {
+  document.title = `Revisión · ${r.titulo}`;
+  const pts = (v) => `${formatNumber(v)} ${v === 1 ? "punto" : "puntos"}`;
+  const cards = r.questions.map((q, i) => {
+    const legend = h("p", { class: "review-qtext" }, h("span", { class: "qnum" }, `${i + 1}.`), ...richNodes(q.text, r.imagenes));
+    if (q.tipo === "abierta") {
+      const pending = q.puntos === null || q.puntos === undefined;
+      return h(
+        "div",
+        { class: `card review-q ${pending ? "pending" : ""}` },
+        legend,
+        h("span", { class: `review-status ${pending ? "pending" : "ok"}` }, pending ? "Pendiente de corregir" : `${formatNumber(q.puntos)} de ${pts(q.valor)}`),
+        h("p", { class: "muted small" }, "Tu respuesta:"),
+        q.respuesta ? h("p", { class: "review-open" }, q.respuesta) : h("p", { class: "muted" }, "(en blanco)")
+      );
+    }
+    const state = q.respuesta === null ? "blank" : q.respuesta === q.correcta ? "ok" : "bad";
+    const label = { ok: "Correcta", bad: "Incorrecta", blank: "En blanco" }[state];
+    return h(
+      "div",
+      { class: `card review-q ${state}` },
+      legend,
+      h("span", { class: `review-status ${state}` }, label),
+      q.options.map((o, j) => {
+        const isCorrect = o.id === q.correcta;
+        const isMine = o.id === q.respuesta;
+        const cls = isCorrect ? "correct" : isMine ? "wrong" : "";
+        const tag = isCorrect && isMine ? "✓ Tu respuesta" : isCorrect ? "✓ Correcta" : isMine ? "✗ Tu respuesta" : "";
+        return h(
+          "div",
+          { class: `review-opt ${cls}` },
+          h("span", { class: "letter" }, "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[j]),
+          h("span", { class: "opt-text" }, o.text),
+          tag ? h("span", { class: "tag" }, tag) : null
+        );
+      })
+    );
+  });
+  const hasNote = typeof r.nota === "number";
+  const pendingOpen = r.questions.some((q) => q.tipo === "abierta" && (q.puntos === null || q.puntos === undefined));
+  render(
+    h(
+      "div",
+      {},
+      h(
+        "div",
+        { class: "card" },
+        h("h1", {}, `Revisión: ${r.titulo}`),
+        h("p", { class: "muted" }, `${r.nombre} ${r.apellidos}`.trim()),
+        hasNote
+          ? [
+              h("p", { class: "muted" }, pendingOpen ? "Nota provisional" : "Tu nota"),
+              h("div", { class: "big-result" }, `${formatNumber(r.nota)} / 10`),
+              pendingOpen ? h("p", { class: "muted small" }, "Faltan preguntas abiertas por corregir: tu nota cambiará cuando tu profesor las corrija.") : null,
+            ]
+          : null,
+        h(
+          "div",
+          { class: "review-summary" },
+          h("span", { class: "review-status ok" }, `Aciertos: ${r.aciertos}`),
+          h("span", { class: "review-status bad" }, `Errores: ${r.errores}`),
+          h("span", { class: "review-status blank" }, `En blanco: ${r.blancos}`)
+        ),
+        onBack ? h("div", { class: "actions" }, h("button", { type: "button", class: "btn secondary small", onclick: onBack }, "Volver")) : null
+      ),
+      cards
     )
   );
 }
@@ -806,6 +930,7 @@ async function main() {
   if (!examId) {
     return showMessage("Falta el examen", "Este enlace no es correcto. Pide a tu profesor el enlace del examen.", "warn");
   }
+  if (await tryReview()) return;
   try {
     const res = await fetchExam(examId);
     if (res.ok) {

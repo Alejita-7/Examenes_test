@@ -119,6 +119,15 @@ Escribe las preguntas en un archivo de texto con este formato (la respuesta corr
 
 La hoja de Google guarda los puntos, y la **nota final** de cada alumno (columna `nota`) se actualiza sola: test + puntos de las abiertas, sobre 10. Mientras no corrijas, `nota` es solo la del test y la columna `pendientes` sale en ámbar.
 
+**Revisión para los alumnos (ver sus fallos).** Cuando todos hayan hecho el examen, pulsa **Publicar revisión** en «Mis exámenes». A partir de ese momento, cada alumno que abra **el mismo enlace del examen en el mismo dispositivo** desde el que lo envió ve su revisión: su nota, cada pregunta marcada como correcta, incorrecta o en blanco, su respuesta y la correcta, y en las abiertas lo que escribió y los puntos que le has puesto (o «pendiente de corregir»). Funciona aunque hayas cerrado el examen, y puedes volver a ocultarla con **Ocultar revisión**.
+
+- Cada alumno solo ve **su propio** examen: el dispositivo guarda un identificador aleatorio de su envío y sin él no hay revisión.
+- Si el examen sigue abierto, el panel te pide confirmación: quien aún no lo haya hecho podría ver las soluciones a través de un compañero.
+- En un dispositivo compartido, el alumno elige su nombre de la lista de envíos hechos desde ese dispositivo.
+- Si el alumno borra los datos del navegador o usa otro dispositivo, no puede ver la revisión.
+- Solo vale para envíos hechos con esta versión: los exámenes entregados antes no guardaron el identificador en el dispositivo.
+- Requiere `Code.gs` actualizado; si no lo está, el botón no aparece.
+
 **Exportar las notas.** El botón **Exportar notas (CSV)** de cada examen descarga una tabla limpia (apellidos, nombre, grupo, nota final, aciertos, errores, en blanco, salidas, segundos fuera, intentos de pegar), ordenada por apellidos y lista para abrir en Excel en español (separador `;`, decimales con coma).
 
 **Qué ve el alumno.** Solo la parte del test: «Parte tipo test: X sobre Y puntos» y el aviso de que las abiertas las corrige el profesor. Si quitas «Mostrar la nota al alumno», no ve nada.

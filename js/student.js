@@ -636,7 +636,12 @@ function renderExam(session) {
   // En ordenadores salir de la pantalla completa (Esc) no es un gesto natural: margen más corto que en tabletas.
   // En el iPad, deslizar el dedo para desplazarse empezando cerca del borde activa a veces el gesto del sistema
   // (Dock, multitarea, notificaciones) y la página se oculta un instante: se da un margen antes de contarlo.
-  const tablet = window.matchMedia?.("(any-pointer: coarse)").matches ?? false;
+  // Tableta: el puntero principal es el dedo. El iPad también se reconoce cuando Safari se presenta como un Mac
+  // («sitio web de escritorio», activado por defecto en iPad): un «Mac» con pantalla táctil es un iPad.
+  // Los portátiles táctiles (puntero principal: ratón o panel) no cuentan como tableta.
+  const tablet =
+    (window.matchMedia?.("(pointer: coarse)").matches ?? false) ||
+    (/Macintosh/.test(navigator.userAgent) && (navigator.maxTouchPoints ?? 0) > 1);
   const watcher = createWatcher(
     tablet ? { grace: { hidden: 2000 } } : window.matchMedia?.("(pointer: fine)").matches ? { grace: { fullscreenLost: 1500 } } : {}
   );
@@ -666,7 +671,7 @@ function renderExam(session) {
       innerHeight: document.documentElement.clientHeight || window.innerHeight,
       screenWidth: window.screen?.width,
       screenHeight: window.screen?.height,
-      coarse: window.matchMedia?.("(pointer: coarse)").matches ?? false,
+      coarse: tablet,
       typing: isEditable(document.activeElement),
       wasReduced,
     });
@@ -711,8 +716,10 @@ function renderExam(session) {
   if (watched) {
     document.addEventListener("visibilitychange", evaluateAway);
     window.addEventListener("blur", () => {
-      // En tabletas, el «blur» que acompaña a mostrar u ocultar el teclado no es salir del examen.
-      if (tablet && (Date.now() < keyboardUntil || isEditable(document.activeElement))) return;
+      // En tabletas no se usa: Safari en iPad avisa de «blur» al ocultar el teclado y en otros gestos aunque el
+      // alumno siga en el examen, y a veces nunca avisa de «focus» al volver (salidas falsas «blurred»).
+      // Irse a otra app se detecta por la página oculta; la pantalla dividida, por el tamaño de la ventana.
+      if (tablet) return;
       blurred = true;
       evaluateAway();
     });

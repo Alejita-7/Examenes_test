@@ -33,22 +33,33 @@
     addEventListener("blur", () => (blurred = true));
     addEventListener("focus", () => (blurred = false));
     let last = "—";
+    const vw = () => document.documentElement.clientWidth || innerWidth;
+    const vh = () => document.documentElement.clientHeight || innerHeight;
+    let wake = navigator.wakeLock ? "pidiendo…" : "no disponible";
+    async function keepOn() {
+      if (!navigator.wakeLock || document.hidden) return;
+      try { const l = await navigator.wakeLock.request("screen"); wake = "activa"; l.addEventListener("release", () => (wake = "soltada")); }
+      catch (e) { wake = "rechazada: " + e.message; }
+    }
+    keepOn();
+    document.addEventListener("visibilitychange", keepOn);
     const t0 = Date.now();
     const log = document.getElementById("log");
     const state = document.getElementById("state");
     const snap = () => ({
       hasFocus: document.hasFocus(),
       hidden: document.hidden,
-      ventana: `${innerWidth}x${innerHeight}`,
+      ventana: `${vw()}x${vh()}`,
+      zoom: (visualViewport?.scale ?? 1).toFixed(2),
       pantalla: `${screen.width}x${screen.height}`,
-      proporcion: ((innerWidth * innerHeight) / (screen.width * screen.height)).toFixed(2),
+      proporcion: ((vw() * vh()) / (screen.width * screen.height)).toFixed(2),
       tactil: matchMedia("(pointer: coarse)").matches,
       raton: matchMedia("(pointer: fine)").matches,
       fullscreen: Boolean(document.fullscreenElement || document.webkitFullscreenElement),
       fsSoportada: Boolean(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen),
     });
     const typing = () => Boolean(document.activeElement?.matches?.("textarea, input, [contenteditable]"));
-    const reduced = () => isReducedWindow({ innerWidth, innerHeight, screenWidth: screen.width, screenHeight: screen.height, coarse: matchMedia("(pointer: coarse)").matches, typing: typing() });
+    const reduced = () => isReducedWindow({ innerWidth: vw(), innerHeight: vh(), screenWidth: screen.width, screenHeight: screen.height, coarse: matchMedia("(pointer: coarse)").matches, typing: typing() });
     function write(kind) {
       const s = snap();
       const line = `${((Date.now() - t0) / 1000).toFixed(1).padStart(6)} s  ${kind.padEnd(18)} foco=${s.hasFocus} oculta=${s.hidden} completa=${s.fullscreen} ventana=${s.ventana} prop=${s.proporcion}`;
@@ -66,6 +77,8 @@
         ["La página está oculta", s.hidden],
         ["Tamaño de la ventana", s.ventana],
         ["Tamaño de la pantalla", s.pantalla],
+        ["Zoom con los dedos", s.zoom],
+        ["Pantalla siempre encendida (evita el bloqueo automático)", wake],
         [`Proporción ventana/pantalla (se considera pantalla dividida por debajo de ${REDUCED_RATIO})`, s.proporcion],
         ["Pantalla táctil", s.tactil],
         ["Ratón (puntero fino)", s.raton],

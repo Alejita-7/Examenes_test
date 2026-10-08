@@ -221,7 +221,7 @@ La nota se calcula con normalidad: la app **no pone un 0 automático**. Las colu
 | Señal | Qué detecta | Margen |
 |---|---|---|
 | Página oculta | Otra pestaña, otra app (cuando cubre todo), pantalla bloqueada | al instante |
-| Ventana reducida | Solo en tabletas: pantalla dividida, Slide Over o Stage Manager que reducen la ventana. No cuenta mientras el alumno escribe en un cuadro de texto (el teclado en pantalla también encoge la ventana) | 1,5 s |
+| Ventana reducida | Solo en tabletas: pantalla dividida, Slide Over o Stage Manager que reducen la ventana. No cuenta mientras el alumno escribe en un cuadro de texto (el teclado en pantalla también encoge la ventana) ni al ampliar con dos dedos | 1,5 s |
 | Ventana sin foco | Hacer clic en otra ventana o app | 2 s |
 | Salir de la pantalla completa | **Solo si marcas «Exigir pantalla completa»** al publicar (opcional, desactivada por defecto). Se pide pantalla completa al empezar; si el alumno sale de ella, el examen se oculta y un **toque** en cualquier parte (o el botón) la restaura | 5 s en tabletas, 1,5 s en ordenadores |
 
@@ -230,6 +230,8 @@ La pantalla completa es opcional porque su comportamiento depende mucho del nave
 **Al empezar no se penaliza nada.** Mientras el examen no esté bien colocado (por ejemplo, empezado en pantalla dividida, o sin pantalla completa si la has exigido), el alumno ve un aviso («Pon el examen a toda la pantalla… Esto todavía no cuenta como salida») y la vigilancia no empieza hasta que lleva 1,5 s seguidos en buen estado. Si el navegador no permite la pantalla completa, no se exige. Tras pedirla, se esperan 2,5 s a que el navegador termine de cambiar de tamaño.
 
 Cada salida guarda en la hoja **qué señal la provocó** (`motivos_salida`, por ejemplo `reduced,hidden`): si en algún dispositivo salen salidas que no esperas, esa columna dice la causa.
+
+Durante un examen vigilado se pide al navegador que **mantenga la pantalla encendida**, para que el iPad no se bloquee solo mientras el alumno lee o piensa (eso contaba como salida). Funciona en iPadOS 16.4 o posterior; en versiones anteriores, sube el bloqueo automático en *Ajustes → Pantalla y brillo*.
 
 El ratón fuera de la página **no** cuenta: se disparaba solo con acercarlo a la barra de pestañas o a la barra de desplazamiento, o con dejarlo en el borde. Si el alumno hace clic en otra ventana, lo detecta la señal de foco.
 

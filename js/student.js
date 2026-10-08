@@ -531,6 +531,7 @@ function renderExam(session) {
 
     finished = true;
     clearInterval(watchTimer);
+    releaseScreen();
     store.remove(key);
     store.remove(lastKey());
     showDone(res, motivo);
@@ -635,8 +636,10 @@ function renderExam(session) {
     if (document.hasFocus()) focusSeen = true;
     if (fsActive && fsElement()) fullscreenSeen = true;
     wasReduced = isReducedWindow({
-      innerWidth: window.innerWidth,
-      innerHeight: window.innerHeight,
+      // Tamaño de la ventana sin contar el zoom: en el iPad, ampliar con dos dedos encoge innerWidth/innerHeight
+      // y se confundía con la pantalla dividida.
+      innerWidth: document.documentElement.clientWidth || window.innerWidth,
+      innerHeight: document.documentElement.clientHeight || window.innerHeight,
       screenWidth: window.screen?.width,
       screenHeight: window.screen?.height,
       coarse: window.matchMedia?.("(pointer: coarse)").matches ?? false,
@@ -651,6 +654,24 @@ function renderExam(session) {
       fullscreenLost: fsActive && fullscreenSeen && !fsElement() && !settling,
       needsFullscreen: fsActive && !fsState.failed && !fsElement(),
     };
+  }
+
+  // Mientras el alumno lee o piensa sin tocar la pantalla, el iPad se bloquearía solo (página oculta = salida).
+  // Se pide al navegador que mantenga la pantalla encendida; el sistema la suelta al ocultarse la página,
+  // así que se vuelve a pedir al volver. Si el navegador no lo permite, se sigue sin ello.
+  let wakeLock = null;
+  async function keepScreenOn() {
+    if (finished || document.hidden || wakeLock || !navigator.wakeLock) return;
+    try {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => { wakeLock = null; });
+    } catch {
+      wakeLock = null;
+    }
+  }
+  function releaseScreen() {
+    wakeLock?.release().catch(() => {});
+    wakeLock = null;
   }
 
   function evaluateAway() {
@@ -686,6 +707,8 @@ function renderExam(session) {
       },
       true
     );
+    keepScreenOn();
+    document.addEventListener("visibilitychange", keepScreenOn);
     watchTimer = setInterval(evaluateAway, 500);
     evaluateAway(); // muestra la cubierta de preparación si todavía no está a pantalla completa
   }

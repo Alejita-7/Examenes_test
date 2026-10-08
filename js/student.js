@@ -646,9 +646,17 @@ function renderExam(session) {
   let focusSeen = false; // hasFocus() solo cuenta si alguna vez ha sido true
   let fullscreenSeen = false; // la pérdida de pantalla completa solo cuenta si estuvo en ella
   let watchTimer = null;
+  // Teclado en pantalla: al mostrarlo u ocultarlo (también con la tecla de ocultar teclado del iPad), Safari
+  // cambia el foco y el tamaño de la ventana durante la animación. Durante KEYBOARD_MS tras entrar o salir de un
+  // cuadro de texto, en tabletas solo cuenta la página oculta (cambiar de app sigue detectándose).
+  const KEYBOARD_MS = 3000;
+  let keyboardUntil = 0;
+  const isEditable = (el) => Boolean(el?.matches?.("textarea, input, [contenteditable]"));
 
   function collectInputs() {
-    const settling = Date.now() < quietUntil;
+    const now = Date.now();
+    const settling = now < quietUntil;
+    const keyboardMoving = tablet && now < keyboardUntil;
     if (document.hasFocus()) focusSeen = true;
     if (fsActive && fsElement()) fullscreenSeen = true;
     wasReduced = isReducedWindow({
@@ -659,14 +667,16 @@ function renderExam(session) {
       screenWidth: window.screen?.width,
       screenHeight: window.screen?.height,
       coarse: window.matchMedia?.("(pointer: coarse)").matches ?? false,
-      typing: Boolean(document.activeElement?.matches?.("textarea, input, [contenteditable]")),
+      typing: isEditable(document.activeElement),
       wasReduced,
     });
     return {
       hidden: document.hidden || pageHidden,
-      blurred,
-      noFocus: focusSeen && !document.hasFocus(),
-      reduced: wasReduced && !settling,
+      blurred: blurred && !keyboardMoving,
+      // En tabletas document.hasFocus() puede quedarse en false tras ocultar el teclado aunque el alumno siga
+      // en el examen: allí no se usa (otra app se detecta por la página oculta o la ventana reducida).
+      noFocus: !tablet && focusSeen && !document.hasFocus(),
+      reduced: wasReduced && !settling && !keyboardMoving,
       fullscreenLost: fsActive && fullscreenSeen && !fsElement() && !settling,
       needsFullscreen: fsActive && !fsState.failed && !fsElement(),
     };
@@ -700,7 +710,12 @@ function renderExam(session) {
 
   if (watched) {
     document.addEventListener("visibilitychange", evaluateAway);
-    window.addEventListener("blur", () => { blurred = true; evaluateAway(); });
+    window.addEventListener("blur", () => {
+      // En tabletas, el «blur» que acompaña a mostrar u ocultar el teclado no es salir del examen.
+      if (tablet && (Date.now() < keyboardUntil || isEditable(document.activeElement))) return;
+      blurred = true;
+      evaluateAway();
+    });
     window.addEventListener("focus", () => { blurred = false; evaluateAway(); });
     window.addEventListener("pagehide", () => { pageHidden = true; evaluateAway(); });
     window.addEventListener("pageshow", () => { pageHidden = false; evaluateAway(); });
@@ -709,8 +724,22 @@ function renderExam(session) {
     document.addEventListener("fullscreenchange", evaluateAway);
     document.addEventListener("webkitfullscreenchange", evaluateAway);
     // El teclado en pantalla aparece y desaparece al entrar o salir de un cuadro de texto.
-    document.addEventListener("focusin", evaluateAway);
-    document.addEventListener("focusout", () => setTimeout(evaluateAway, 0));
+    const keyboardChange = (e) => {
+      if (isEditable(e.target)) keyboardUntil = Date.now() + KEYBOARD_MS;
+      setTimeout(evaluateAway, 0);
+    };
+    document.addEventListener("focusin", keyboardChange);
+    document.addEventListener("focusout", keyboardChange);
+    // Si el alumno está tocando o escribiendo en la página, la ventana es la activa aunque el navegador no haya
+    // avisado con «focus» (Safari no siempre lo hace al ocultar el teclado): se quita la marca de ventana sin foco.
+    for (const type of ["pointerdown", "touchstart", "keydown", "input"]) {
+      document.addEventListener(type, () => {
+        if (blurred) {
+          blurred = false;
+          evaluateAway();
+        }
+      }, { capture: true, passive: true });
+    }
     // Un toque en cualquier parte devuelve la pantalla completa sin que el alumno tenga que buscar nada:
     // así los gestos naturales de la tableta que la quitan no cuestan una salida.
     // Se usa pointerup: en pantallas táctiles el navegador solo permite pedir la pantalla completa al levantar

@@ -116,6 +116,7 @@ Publica un examen con **Vigilar salidas** marcado y **2 salidas permitidas** (as
 - [ ] **iPad, otra app de verdad:** sal a otra app unos segundos y vuelve: cuenta **1 salida** con el tiempo fuera correcto.
 - [ ] **iPad sin tocar:** deja el examen abierto más tiempo que el bloqueo automático del iPad: la pantalla **no** se apaga y no suma salidas.
 - [ ] **iPad con zoom:** amplía con dos dedos una pregunta o una imagen unos segundos: **no** cuenta como salida.
+- [ ] **iPad, ocultar el teclado:** escribe en una pregunta abierta y pulsa la tecla de ocultar teclado (abajo a la derecha); espera 10 s sin tocar nada: **no** aparece el aviso ni suma salidas.
 - [ ] **Tableta con pregunta abierta:** toca el cuadro de texto y escribe un rato con el teclado en pantalla: **no** cuenta como salida.
 - [ ] En un examen **sin** vigilar, cambiar de app no cuenta nada ni avisa.
 - [ ] Un examen publicado antes de esta versión sigue funcionando.

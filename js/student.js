@@ -71,14 +71,15 @@ const fsSupported = Boolean(document.documentElement.requestFullscreen || docume
 const fsState = { failed: false }; // true si el navegador ha rechazado la pantalla completa: ya no se exige
 
 // Debe llamarse dentro de un gesto del usuario (pulsar o tocar). Si no se puede, se sigue sin ella.
-async function enterFullscreen() {
+// Un intento automático (auto) que falla no desactiva la exigencia: el siguiente toque lo reintenta.
+async function enterFullscreen({ auto = false } = {}) {
   if (!fsSupported || fsElement()) return;
   const el = document.documentElement;
   try {
     await (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
     fsState.failed = false;
   } catch {
-    fsState.failed = true;
+    if (!auto) fsState.failed = true;
   }
 }
 
@@ -623,7 +624,12 @@ function renderExam(session) {
    * (página oculta, foco, ventana reducida, pantalla completa). Aquí solo se recogen las señales.
    */
   // En ordenadores salir de la pantalla completa (Esc) no es un gesto natural: margen más corto que en tabletas.
-  const watcher = createWatcher(window.matchMedia?.("(pointer: fine)").matches ? { grace: { fullscreenLost: 1500 } } : {});
+  // En el iPad, deslizar el dedo para desplazarse empezando cerca del borde activa a veces el gesto del sistema
+  // (Dock, multitarea, notificaciones) y la página se oculta un instante: se da un margen antes de contarlo.
+  const tablet = window.matchMedia?.("(any-pointer: coarse)").matches ?? false;
+  const watcher = createWatcher(
+    tablet ? { grace: { hidden: 2000 } } : window.matchMedia?.("(pointer: fine)").matches ? { grace: { fullscreenLost: 1500 } } : {}
+  );
   let wasReduced = false;
   let blurred = false;
   let pageHidden = false;
@@ -697,12 +703,14 @@ function renderExam(session) {
     document.addEventListener("focusout", () => setTimeout(evaluateAway, 0));
     // Un toque en cualquier parte devuelve la pantalla completa sin que el alumno tenga que buscar nada:
     // así los gestos naturales de la tableta que la quitan no cuestan una salida.
+    // Se usa pointerup: en pantallas táctiles el navegador solo permite pedir la pantalla completa al levantar
+    // el dedo. Al desplazarse con el dedo no llega pointerup (llega pointercancel), así que no molesta.
     document.addEventListener(
-      "pointerdown",
+      "pointerup",
       () => {
         if (fsActive && !fsElement() && !fsState.failed && (fullscreenSeen || !watcher.isArmed())) {
           quietUntil = Date.now() + QUIET_MS;
-          enterFullscreen();
+          enterFullscreen({ auto: true });
         }
       },
       true

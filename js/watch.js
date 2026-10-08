@@ -16,11 +16,10 @@ export const GRACE_MS = {
   fullscreenLost: 5000, // salió de la pantalla completa (da tiempo a volver con un toque)
   blurred: 2000, // otra ventana activa
   noFocus: 2000, // document.hasFocus() en false
-  pointerOut: 2000, // el ratón fuera de la página (solo ordenadores)
 };
 
 /** Orden de prioridad para decir cuál fue el motivo cuando varias señales coinciden. */
-export const PRIORITY = ["hidden", "reduced", "fullscreenLost", "blurred", "noFocus", "pointerOut"];
+export const PRIORITY = ["hidden", "reduced", "fullscreenLost", "blurred", "noFocus"];
 
 /** Tiempo seguido en buen estado antes de empezar a vigilar. */
 export const ARM_MS = 1500;
@@ -38,7 +37,7 @@ export function createWatcher(options = {}) {
 
   /**
    * @param {{hidden?:boolean, reduced?:boolean, fullscreenLost?:boolean, blurred?:boolean,
-   *          noFocus?:boolean, pointerOut?:boolean, needsFullscreen?:boolean}} inputs
+   *          noFocus?:boolean, needsFullscreen?:boolean}} inputs
    * @param {number} now milisegundos
    * @returns {{phase:'preparing'|'armed'|'away', coverReason:null|'prepare'|'away',
    *            leave?:{reason:string, since:number}, back?:{awayMs:number, reason:string}}}

@@ -531,6 +531,7 @@ function renderExam(session) {
 
     finished = true;
     clearInterval(watchTimer);
+    releaseScreen();
     store.remove(key);
     store.remove(lastKey());
     showDone(res, motivo);
@@ -619,14 +620,13 @@ function renderExam(session) {
 
   /*
    * ¿Sigue el alumno en la pantalla del examen? La decisión la toma js/watch.js a partir de varias señales
-   * (página oculta, foco, ventana reducida, pantalla completa, ratón). Aquí solo se recogen las señales.
+   * (página oculta, foco, ventana reducida, pantalla completa). Aquí solo se recogen las señales.
    */
   // En ordenadores salir de la pantalla completa (Esc) no es un gesto natural: margen más corto que en tabletas.
   const watcher = createWatcher(window.matchMedia?.("(pointer: fine)").matches ? { grace: { fullscreenLost: 1500 } } : {});
   let wasReduced = false;
   let blurred = false;
   let pageHidden = false;
-  let pointerOut = false;
   let focusSeen = false; // hasFocus() solo cuenta si alguna vez ha sido true
   let fullscreenSeen = false; // la pérdida de pantalla completa solo cuenta si estuvo en ella
   let watchTimer = null;
@@ -636,22 +636,42 @@ function renderExam(session) {
     if (document.hasFocus()) focusSeen = true;
     if (fsActive && fsElement()) fullscreenSeen = true;
     wasReduced = isReducedWindow({
-      innerWidth: window.innerWidth,
-      innerHeight: window.innerHeight,
+      // Tamaño de la ventana sin contar el zoom: en el iPad, ampliar con dos dedos encoge innerWidth/innerHeight
+      // y se confundía con la pantalla dividida.
+      innerWidth: document.documentElement.clientWidth || window.innerWidth,
+      innerHeight: document.documentElement.clientHeight || window.innerHeight,
       screenWidth: window.screen?.width,
       screenHeight: window.screen?.height,
       coarse: window.matchMedia?.("(pointer: coarse)").matches ?? false,
+      typing: Boolean(document.activeElement?.matches?.("textarea, input, [contenteditable]")),
       wasReduced,
     });
     return {
       hidden: document.hidden || pageHidden,
       blurred,
       noFocus: focusSeen && !document.hasFocus(),
-      pointerOut,
       reduced: wasReduced && !settling,
       fullscreenLost: fsActive && fullscreenSeen && !fsElement() && !settling,
       needsFullscreen: fsActive && !fsState.failed && !fsElement(),
     };
+  }
+
+  // Mientras el alumno lee o piensa sin tocar la pantalla, el iPad se bloquearía solo (página oculta = salida).
+  // Se pide al navegador que mantenga la pantalla encendida; el sistema la suelta al ocultarse la página,
+  // así que se vuelve a pedir al volver. Si el navegador no lo permite, se sigue sin ello.
+  let wakeLock = null;
+  async function keepScreenOn() {
+    if (finished || document.hidden || wakeLock || !navigator.wakeLock) return;
+    try {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => { wakeLock = null; });
+    } catch {
+      wakeLock = null;
+    }
+  }
+  function releaseScreen() {
+    wakeLock?.release().catch(() => {});
+    wakeLock = null;
   }
 
   function evaluateAway() {
@@ -672,11 +692,9 @@ function renderExam(session) {
     window.addEventListener("orientationchange", evaluateAway);
     document.addEventListener("fullscreenchange", evaluateAway);
     document.addEventListener("webkitfullscreenchange", evaluateAway);
-    if (window.matchMedia?.("(pointer: fine)").matches) {
-      // Ordenador: el ratón que sale de la página (otra ventana, otro monitor) y no vuelve en 2 s.
-      document.documentElement.addEventListener("mouseleave", () => { pointerOut = true; });
-      document.documentElement.addEventListener("mouseenter", () => { pointerOut = false; evaluateAway(); });
-    }
+    // El teclado en pantalla aparece y desaparece al entrar o salir de un cuadro de texto.
+    document.addEventListener("focusin", evaluateAway);
+    document.addEventListener("focusout", () => setTimeout(evaluateAway, 0));
     // Un toque en cualquier parte devuelve la pantalla completa sin que el alumno tenga que buscar nada:
     // así los gestos naturales de la tableta que la quitan no cuestan una salida.
     document.addEventListener(
@@ -689,6 +707,8 @@ function renderExam(session) {
       },
       true
     );
+    keepScreenOn();
+    document.addEventListener("visibilitychange", keepScreenOn);
     watchTimer = setInterval(evaluateAway, 500);
     evaluateAway(); // muestra la cubierta de preparación si todavía no está a pantalla completa
   }

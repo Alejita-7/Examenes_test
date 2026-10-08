@@ -112,6 +112,8 @@ Publica un examen con **Vigilar salidas** marcado y **2 salidas permitidas** (as
 - [ ] **Gestos naturales del iPad** (deslizar para el centro de control o las notificaciones, mostrar la barra de apps y volver enseguida, girar el iPad): **no** deben sumar salidas. Si alguno lo hace, mira la columna `motivos_salida` de la hoja o `diagnostico.html` y apúntame cuál.
 - [ ] Si la pantalla completa se pierde por un gesto, un **toque** en cualquier parte la restaura sin penalización.
 - [ ] Girar el iPad (vertical/horizontal) **no** cuenta como salida.
+- [ ] **iPad, desplazarse con el dedo:** sube y baja por el examen deslizando desde distintas zonas, también cerca de los bordes de abajo y de arriba: **no** suma salidas.
+- [ ] **iPad, otra app de verdad:** sal a otra app unos segundos y vuelve: cuenta **1 salida** con el tiempo fuera correcto.
 - [ ] **iPad sin tocar:** deja el examen abierto más tiempo que el bloqueo automático del iPad: la pantalla **no** se apaga y no suma salidas.
 - [ ] **iPad con zoom:** amplía con dos dedos una pregunta o una imagen unos segundos: **no** cuenta como salida.
 - [ ] **Tableta con pregunta abierta:** toca el cuadro de texto y escribe un rato con el teclado en pantalla: **no** cuenta como salida.

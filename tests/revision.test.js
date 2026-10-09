@@ -82,3 +82,14 @@ test("ocultar de nuevo la revisión la cierra", () => {
   env.post({ action: "setReview", token: "secreto", id, revision: false });
   assert.equal(env.post({ action: "review", examId: id, envioId: "env-ana" }).error, "review_closed");
 });
+
+test("exámenes publicados antes de la columna revision: setup la rellena con FALSO", () => {
+  const { env, id } = setup();
+  const sh = env.sheets.get("Examenes");
+  const col = sh.rows[0].indexOf("revision");
+  const row = sh.rows.find((r) => String(r[0]) === String(id));
+  row.length = col; // como una fila de una versión anterior, sin la columna
+  env.fn("setup")();
+  assert.equal(row[col], false);
+  assert.equal(env.get({ action: "list", token: "secreto" }).exams[0].revision, false);
+});

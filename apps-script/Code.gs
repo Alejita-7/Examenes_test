@@ -420,7 +420,9 @@ function setActive_(p) {
 
 // Publica u oculta la revisión: con ella, cada alumno ve sus respuestas y las correctas.
 function setReview_(p) {
-  return setExamFlag_(p, 'revision', p.revision);
+  var res = setExamFlag_(p, 'revision', p.revision);
+  if (res.ok) formatExamsSheet_(getExamsSheet_()); // da formato a la columna en hojas de versiones anteriores
+  return res;
 }
 
 function setExamFlag_(p, name, value) {
@@ -1031,10 +1033,14 @@ function headerMap_(headers) {
 }
 
 // Si la hoja es de una versión anterior (menos columnas), añade las cabeceras que faltan.
+// Devuelve true si ha añadido alguna.
 function ensureHeaders_(sheet, headers) {
+  var added = false;
   for (var i = sheet.getLastColumn(); i < headers.length; i++) {
     sheet.getRange(1, i + 1).setValue(headers[i]);
+    added = true;
   }
+  return added;
 }
 
 function getExamsSheet_() {
@@ -1046,8 +1052,8 @@ function getExamsSheet_() {
     sh.setFrozenRows(1);
     setTextColumns_(sh, [1, 3, 5]);
     formatExamsSheet_(sh);
-  } else {
-    ensureHeaders_(sh, EXAM_HEADERS);
+  } else if (ensureHeaders_(sh, EXAM_HEADERS)) {
+    formatExamsSheet_(sh); // las columnas nuevas (p. ej. revision) con el mismo aspecto que las demás
   }
   return sh;
 }
@@ -1143,6 +1149,22 @@ function formatExamsSheet_(sh) {
   var col = function (name) { return EXAM_HEADERS.indexOf(name) + 1; };
   var rowsMax = sh.getMaxRows();
   try {
+    // Exámenes publicados antes de existir la columna «revision»: vacía equivale a FALSO; se escribe para que se vea igual.
+    var last = sh.getLastRow();
+    if (last > 1) {
+      var ids = sh.getRange(2, 1, last - 1, 1).getValues();
+      var rev = sh.getRange(2, col('revision'), last - 1, 1);
+      var vals = rev.getValues();
+      var changed = false;
+      for (var r = 0; r < vals.length; r++) {
+        if (ids[r][0] !== '' && vals[r][0] === '') { vals[r][0] = false; changed = true; }
+      }
+      if (changed) rev.setValues(vals);
+    }
+  } catch (err) {
+    console.error(err);
+  }
+  try {
     sh.setFrozenRows(1);
     sh.setFrozenColumns(2);
     sh.setColumnWidth(col('id'), 95);
@@ -1150,6 +1172,7 @@ function formatExamsSheet_(sh) {
     sh.setColumnWidth(col('grupo_destino'), 90);
     sh.setColumnWidth(col('codigo_acceso'), 100);
     sh.setColumnWidth(col('creado'), 140);
+    sh.setColumnWidth(col('revision'), 90);
     sh.hideColumns(col('preguntas_json'), 1);
     sh.hideColumns(col('hoja_id'), 1);
   } catch (err) {
@@ -1165,15 +1188,17 @@ function formatExamsSheet_(sh) {
     sh.getRange(2, col('activo'), rowsMax - 1, n - col('activo') + 1).setHorizontalAlignment('center');
     sh.getRange(2, col('titulo'), rowsMax - 1, 1).setFontWeight('bold');
     sh.getRange(2, col('creado'), rowsMax - 1, 1).setNumberFormat('dd/mm/yyyy hh:mm');
-    var letter = String.fromCharCode(64 + col('activo'));
-    var rule = function (formula, bg, fg) {
-      return SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied(formula).setBackground(bg).setFontColor(fg).setBold(true)
-        .setRanges([sh.getRange(2, col('activo'), rowsMax - 1, 1)]).build();
-    };
-    sh.setConditionalFormatRules([
-      rule('=$' + letter + '2=TRUE', '#dff3e4', '#176b34'),
-      rule('=$' + letter + '2=FALSE', '#fde2e1', '#a4262c')
-    ]);
+    // «activo» y «revision»: VERDADERO en verde y FALSO en rojo.
+    var rules = [];
+    ['activo', 'revision'].forEach(function (name) {
+      var letter = String.fromCharCode(64 + col(name));
+      var rule = function (formula, bg, fg) {
+        return SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied(formula).setBackground(bg).setFontColor(fg).setBold(true)
+          .setRanges([sh.getRange(2, col(name), rowsMax - 1, 1)]).build();
+      };
+      rules.push(rule('=$' + letter + '2=TRUE', '#dff3e4', '#176b34'), rule('=$' + letter + '2=FALSE', '#fde2e1', '#a4262c'));
+    });
+    sh.setConditionalFormatRules(rules);
     var old = sh.getBandings();
     for (var i = 0; i < old.length; i++) old[i].remove();
     sh.getRange(2, 1, rowsMax - 1, n).applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY, false, false);
@@ -1278,8 +1303,9 @@ function findExam_(id) {
 
 /**
  * Opcional: ejecútala una vez a mano desde el editor para crear la hoja
- * "Examenes" y comprobar que los permisos están concedidos.
+ * "Examenes" y comprobar que los permisos están concedidos. También vuelve a dar
+ * formato a la hoja "Examenes" (útil tras actualizar el script).
  */
 function setup() {
-  getExamsSheet_();
+  formatExamsSheet_(getExamsSheet_());
 }
